@@ -725,7 +725,7 @@ signed main(int argc, char *argv[]) {
                 break;
             }
             case 2: {
-                if (bt > 1) {
+                if (bt > 0) {
                     compress2WithTemporalPrediction<float>(inPath, 3, cmpPath, conf, oridata, ord, bt, blkflag, bx, by,
                                                            bz);
                 } else {
