@@ -789,7 +789,7 @@ namespace SZ3 {
 //            }
 
 
-            uchar *bytes_blkcnt = new uchar[std::max(blknum * 4, (size_t) 1024)], *tail_blkcnt = bytes_blkcnt;
+            uchar *bytes_blkcnt = new uchar[std::max(blknum * 8, (size_t) 1024)], *tail_blkcnt = bytes_blkcnt;
             encoder.preprocess_encode(blkcnt, blknum, 0, 0xc0);
             encoder.save(tail_blkcnt);
             encoder.encode(blkcnt, blknum, tail_blkcnt);
