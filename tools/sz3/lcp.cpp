@@ -751,7 +751,7 @@ signed main(int argc, char *argv[]) {
                 break;
             }
             case 2: {
-                if (bt > 1) {
+                if (bt > 0) {
                     decompress2WithTemporalPrediction<float>(outPath, 3, cmpPath, oridata, ord);
                 } else {
                     decompress2<float>(outPath, 3, cmpPath, oridata, ord);

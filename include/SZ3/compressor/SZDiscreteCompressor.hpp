@@ -1243,6 +1243,11 @@ namespace SZ3 {
                     memcpy(p, ord1, n * sizeof(size_t));
                 } else {
 
+                    if(fflag > 1){
+                        fflag = 1;
+                        conf1.absErrorBound = conf.absErrorBound;
+                    }
+
 #if __batch_info
                     printf("\e[34m\e[1mnew batch, t = %zu\n\e[0m", 0);
 #endif
@@ -1325,6 +1330,11 @@ namespace SZ3 {
 
                     errlen += n;
                 } else {
+
+                    if(fflag > 1){
+                        fflag = 1;
+                        conf1.absErrorBound = conf.absErrorBound;
+                    }
 
 #if __batch_info
                     printf("\e[34m\e[1mnew batch, t = %zu\n\e[0m", t);
