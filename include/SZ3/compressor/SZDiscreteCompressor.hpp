@@ -1403,6 +1403,48 @@ namespace SZ3 {
             return lossless_data;
         }
 
+        uchar isSpatialWorse(const Config conf, T *datax, T *datay, T *dataz){
+
+            const size_t& n = conf.dims[1];
+            LinearQuantizer<T> quantizer(conf.absErrorBound, (1 << 15));
+
+            size_t *err = new size_t[3 * n], *errx = err, *erry = errx + n, *errz = erry + n;
+            uchar *bytes = new uchar[12 * n], *tail = bytes;
+
+            T *nowpx = datax, *nowpy = datay, *nowpz = dataz;
+            T *prepx = datax - n, *prepy = datay - n, *prepz = dataz - n;
+
+            for (size_t i = 0; i < n; i++) {
+                errx[i] = quantizer.quantize(nowpx[i], prepx[i]);
+            }
+            for (size_t i = 0; i < n; i++) {
+                erry[i] = quantizer.quantize(nowpy[i], prepy[i]);
+            }
+            for (size_t i = 0; i < n; i++) {
+                errz[i] = quantizer.quantize(nowpz[i], prepz[i]);
+            }
+
+            HuffmanEncoder<size_t> encoder;
+
+            encoder.preprocess_encode(err, 3 * n, 0);
+            encoder.save(tail);
+            encoder.encode(err, 3 * n, tail);
+
+            size_t cmpSizeTemporal;
+            delete[] lossless.compress(bytes, tail - bytes, cmpSizeTemporal);
+
+            delete[] err;
+            delete[] bytes;
+
+            Config conf1 = Config(n);
+            conf1.absErrorBound = conf.absErrorBound;
+            size_t cmpSizeSpatial;
+
+            compressSimpleBlocking(conf1, datax, datay, dataz, cmpSizeSpatial);
+
+            return cmpSizeTemporal < cmpSizeSpatial;
+        }
+
         /*
          * To compress the data from datax, datay and dataz using configure conf and buffer size bt
          * Store the result in the return pointer, and store the size compressed data in compressed_data
@@ -1438,7 +1480,10 @@ namespace SZ3 {
                     ++total;
                 }
                 if (fail == 0) {
-                    fflag = 0x0a;
+                    size_t t = (nt - 1) / 2;
+                    if (isSpatialWorse(conf, datax + t * n, datay + t * n, dataz + t * n)){
+                        fflag = 0x0a;
+                    }
                 }
             }
 
