@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <math.h>
 #include <iostream>
+#include <thread>
 
 #define __OUTPUT_INFO 0
 #define __soft_eb 0
@@ -403,6 +404,65 @@ namespace SZ3 {
 
         }
 
+        void
+        preProcessing(const Config &conf, size_t *ord, size_t *quads, size_t *repos, NodeWithOrder *vec,
+                      size_t &blknum,
+                      size_t *&blkst, size_t *&blkcnt) {
+            Timer timer(true);
+            #pragma omp parallel default(none), shared(conf, vec, blknum, ord)
+            {
+                #pragma omp for schedule(static)
+                for (size_t i = 0; i < conf.num; i++) {
+                    ord[i] = vec[i].ord;
+                }
+
+                #pragma omp for reduction(+: blknum)
+                for (size_t i = 1; i < conf.num; i++) {
+                    if (vec[i].id != vec[i - 1].id) {
+                        ++blknum;
+                    }
+                }
+            }
+
+            blkst = new size_t[blknum];
+            blkcnt = new size_t[blknum]{};
+
+            size_t i = -1;
+            size_t pre = -1;
+            size_t prequad = 0;
+            size_t prereid = 0;
+
+            for (size_t j = 0; j < conf.num; j++) {
+                NodeWithOrder &node = vec[j];
+                size_t id = node.id;
+                size_t quad = node.reid >> 60;
+                size_t reid = node.reid & 0x0fffffffffffffff;
+
+                if (id != pre) {
+                    i = i + 1;
+                    pre = id;
+                    blkst[i] = pre;
+                    prequad = 0;
+                    prereid = 0;
+                } else if (quad != prequad) {
+                    prereid = 0;
+                }
+                ++blkcnt[i];
+                quads[j] = quad - prequad;
+                repos[j] = reid - prereid;
+
+                prequad = quad;
+                prereid = reid;
+            }
+            double t = timer.stop();
+            std::cout << blknum << std::endl;
+            std::cout << blkst[blknum - 1] << std::endl;
+            std::cout << blkcnt[blknum - 1] << std::endl;
+            std::cout << blkcnt[blknum / 2] << std::endl;
+            std::cout << blkcnt[0] << std::endl;
+            printf("preProcess time = %lf\n", t);
+        }
+
         /*
          * To compress the data from datax, datay and dataz using configure conf
          * Store the results in the return pointer, and store the size compressed data in compressed_data
@@ -410,7 +470,6 @@ namespace SZ3 {
          *
          * after compression, datax, datay, dataz will not increase
          */
-
         uchar *compressSimpleBlocking(const Config &conf, T *datax, T *datay, T *dataz, size_t &compressed_size,
                                       size_t *ord = nullptr, uchar blkflag = 0x03, size_t bx_ = 0, size_t by_ = 0,
                                       size_t bz_ = 0) {
@@ -686,57 +745,13 @@ namespace SZ3 {
 //                writeTextFile(buffer, reposOut, conf.num);
 //                delete[] reposOut;
 
-                radix_sort<NodeWithOrder>(vec, vec + conf.num);
+                radix_sort_omp<NodeWithOrder>(vec, vec + conf.num);
 
 //                double sort_time = timer.stop();
 
 //                printf("sort time = %fs\n", sort_time);
 
-                for (size_t i = 0; i < conf.num; i++) {
-                    ord[i] = vec[i].ord;
-                }
-
-                for (size_t i = 1; i < conf.num; i++) {
-                    if (vec[i].id != vec[i - 1].id) ++blknum;
-                }
-
-                blkst = new size_t[blknum];
-                blkcnt = new size_t[blknum]{};
-
-                size_t i = -1;
-                size_t j = 0;
-                size_t pre = -1;
-                size_t prequad = 0;
-                size_t prereid = 0;
-                for (; j < conf.num; j++) {
-                    NodeWithOrder &node = vec[j];
-                    size_t id = node.id;
-                    size_t quad = node.reid >> 60;
-//                                              ++++----++++----
-                    size_t reid = node.reid & 0x0fffffffffffffff;
-
-                    if (id != pre) {
-                        blkst[++i] = pre = id;
-                        prequad = 0;
-                        prereid = 0;
-                    } else if (quad != prequad) {
-                        prereid = 0;
-                    }
-                    ++blkcnt[i];
-
-                    quads[j] = quad - prequad;
-                    repos[j] = reid - prereid;
-
-//                    if(ord[j]==1){
-//                        printf("j = %zu\n", j);
-//                        printf("p %f %f %f | n %zu %zu %zu\n", px, py, pz, nx, ny, nz);
-//                        printf("data %f %f %f | blkst %zu %zu %zu %zu | quad %zu | repos %zu\n", datax[ord[j]], datay[ord[j]], dataz[ord[j]], id, id%nx, id/nx%ny, id/nx/ny, quads[j], reid);
-//                        printf("pre | %zu %zu\n", prequad, prereid);
-//                    }
-
-                    prequad = quad;
-                    prereid = reid;
-                }
+                preProcessing(conf, ord, quads, repos, vec, blknum, blkst, blkcnt);
 
                 delete[] vec;
             }
@@ -754,31 +769,45 @@ namespace SZ3 {
 //                }
 //            }
 
-            // record the difference array
+            Timer timerEncode(true);
 
+            // record the difference array
+            #pragma omp parallel for
             for (size_t i = blknum - 1; i > 0; i--) {
                 blkst[i] -= blkst[i - 1];
             }
-
-            // use huffman encoder to compress the block bases
+            uchar *bytes_data = new uchar[std::max(conf.num * 16, (size_t) 1024) +
+                                          unx.size() * 3 * sizeof(T)], *tail_data = bytes_data;
             uchar *bytes_blkst = new uchar[std::max(blknum * 8, (size_t) 1024)], *tail_blkst = bytes_blkst;
+            uchar *bytes_repos = new uchar[std::max(
+                    conf.num * std::max((size_t) 4, (size_t) ceil(log2(1. * bx * by * bz))),
+                    (size_t) 1024)], *tail_repos = bytes_repos;
+            uchar *bytes_quads = new uchar[std::max((size_t) ceil(conf.num * 0.4),
+                                                    (size_t) 1024)], *tail_quads = bytes_quads;
+            uchar *bytes_blkcnt = new uchar[std::max(blknum * 8, (size_t) 1024)], *tail_blkcnt = bytes_blkcnt;
+#pragma omp parallel
+{
+#pragma omp sections nowait private(encoder)
+            {
+                // use huffman encoder to compress the block bases
 //            printf("+++flag = %.2lf\n",1.*nx*ny*nz/blknum);
-            encoder.preprocess_encode(blkst, blknum, 0, (1. * nx * ny * nz / blknum > 1e6 ? 1 : 0));
-            encoder.save(tail_blkst);
-            encoder.encode(blkst, blknum, tail_blkst);
-
+#pragma omp section
+                {
+                    encoder.preprocess_encode(blkst, blknum, 0, (1. * nx * ny * nz / blknum > 1e6 ? 1 : 0));
+                    encoder.save(tail_blkst);
+                    encoder.encode(blkst, blknum, tail_blkst);
+                }
 #if __OUTPUT_INFO
 
-            printf("size of blkst = %.2lf MB, %zu bytes\n", 1. * (tail_blkst - bytes_blkst) / 1024 / 1024, tail_blkst - bytes_blkst);
-            size_t cmpblkstSize;
-            delete[] lossless.compress(bytes_blkst, tail_blkst - bytes_blkst, cmpblkstSize);
-            printf("size of compressed blkst = %.2lf MB, %zu bytes\n", 1. * cmpblkstSize / 1024 / 1024, cmpblkstSize);
+                printf("size of blkst = %.2lf MB, %zu bytes\n", 1. * (tail_blkst - bytes_blkst) / 1024 / 1024, tail_blkst - bytes_blkst);
+                size_t cmpblkstSize;
+                delete[] lossless.compress(bytes_blkst, tail_blkst - bytes_blkst, cmpblkstSize);
+                printf("size of compressed blkst = %.2lf MB, %zu bytes\n", 1. * cmpblkstSize / 1024 / 1024, cmpblkstSize);
 
 #endif
 
-            delete[] blkst;
 
-            // use huffman encoder to compress the number of points in each block
+                // use huffman encoder to compress the number of points in each block
 
 //            if(blkflag != 0x00){
 //                size_t tem = 0;
@@ -788,54 +817,51 @@ namespace SZ3 {
 //                printf("%zu\n", tem);
 //            }
 
-
-            uchar *bytes_blkcnt = new uchar[std::max(blknum * 8, (size_t) 1024)], *tail_blkcnt = bytes_blkcnt;
-            encoder.preprocess_encode(blkcnt, blknum, 0, 0xc0);
-            encoder.save(tail_blkcnt);
-            encoder.encode(blkcnt, blknum, tail_blkcnt);
-
+#pragma omp section
+                {
+                    encoder.preprocess_encode(blkcnt, blknum, 0, 0xc0);
+                    encoder.save(tail_blkcnt);
+                    encoder.encode(blkcnt, blknum, tail_blkcnt);
+                }
 #if __OUTPUT_INFO
 
-            printf("size of blkcnt = %.2lf MB, %zu bytes\n", 1. * (tail_blkcnt - bytes_blkcnt) / 1024 / 1024, tail_blkcnt - bytes_blkcnt);
-            size_t cmpblkcntSize;
-            delete[] lossless.compress(bytes_blkcnt, tail_blkcnt - bytes_blkcnt, cmpblkcntSize);
-            printf("size of compressed blkcnt = %.2lf MB, %zu bytes\n", 1. * cmpblkcntSize / 1024 / 1024, cmpblkcntSize);
+                printf("size of blkcnt = %.2lf MB, %zu bytes\n", 1. * (tail_blkcnt - bytes_blkcnt) / 1024 / 1024, tail_blkcnt - bytes_blkcnt);
+                size_t cmpblkcntSize;
+                delete[] lossless.compress(bytes_blkcnt, tail_blkcnt - bytes_blkcnt, cmpblkcntSize);
+                printf("size of compressed blkcnt = %.2lf MB, %zu bytes\n", 1. * cmpblkcntSize / 1024 / 1024, cmpblkcntSize);
 
 #endif
 
-            delete[] blkcnt;
 
 //            for(size_t i=0;i<conf.num;i++){
 //                printf("%zu", quads[i]);
 //            }
 //            printf("\n");
 
-            uchar *bytes_quads = new uchar[std::max((size_t) ceil(conf.num * 0.4),
-                                                    (size_t) 1024)], *tail_quads = bytes_quads;
-            encoder.preprocess_encode(quads, conf.num, 8, 0xc1);
-            encoder.save(tail_quads);
-            encoder.encode(quads, conf.num, tail_quads);
-
+#pragma omp section
+                {
+                    encoder.preprocess_encode(quads, conf.num, 8, 0xc1);
+                    encoder.save(tail_quads);
+                    encoder.encode(quads, conf.num, tail_quads);
+                }
 #if __OUTPUT_INFO
 
-            //            printf("size of quads = %.2lf MB, %zu bytes\n", 1. * (tail_quads - bytes_quads) / 1024 / 1024, tail_quads - bytes_quads);
-                        size_t cmpQuadsSize;
-                        delete[] lossless.compress(bytes_quads, tail_quads - bytes_quads, cmpQuadsSize);
-            //            printf("size of compressed blkcnt = %.2lf MB, %zu bytes\n", 1. * cmpQuadsSize / 1024 / 1024, cmpQuadsSize);
+                //            printf("size of quads = %.2lf MB, %zu bytes\n", 1. * (tail_quads - bytes_quads) / 1024 / 1024, tail_quads - bytes_quads);
+                            size_t cmpQuadsSize;
+                            delete[] lossless.compress(bytes_quads, tail_quads - bytes_quads, cmpQuadsSize);
+                //            printf("size of compressed blkcnt = %.2lf MB, %zu bytes\n", 1. * cmpQuadsSize / 1024 / 1024, cmpQuadsSize);
 
 #endif
 
-            delete[] quads;
 
-            // use huffman encoder to encode the relative error of each point
+                // use huffman encoder to encode the relative error of each point
 
-            uchar *bytes_repos = new uchar[std::max(
-                    conf.num * std::max((size_t) 4, (size_t) ceil(log2(1. * bx * by * bz))),
-                    (size_t) 1024)], *tail_repos = bytes_repos;
-            encoder.preprocess_encode(repos, conf.num, 0, 0xc1);
-            encoder.save(tail_repos);
-            encoder.encode(repos, conf.num, tail_repos);
-
+#pragma omp section
+                {
+                    encoder.preprocess_encode(repos, conf.num, 0, 0xc1);
+                    encoder.save(tail_repos);
+                    encoder.encode(repos, conf.num, tail_repos);
+                }
 //            uchar *bytes_repos = new uchar[std::max(conf.num * std::max((size_t)16, (size_t)ceil(log2(1. * bx * by * bz))), (size_t)1024)], *tail_repos = bytes_repos;
 ////            for(size_t i=0;i<conf.num;i++) printf("%zu", reposx[i]);
 //            encoder.preprocess_encode(reposx, conf.num, 0, 0xc1);
@@ -868,50 +894,55 @@ namespace SZ3 {
 
 #if __OUTPUT_INFO
 
-            printf("size of repos = %.2lf MB, %zu bytes\n", 1. * (tail_repos - bytes_repos + (tail_quads - bytes_quads)) / 1024 / 1024, tail_repos - bytes_repos + (tail_quads - bytes_quads));
-            size_t cmpreposSize;
-            delete[] lossless.compress(bytes_repos, tail_repos - bytes_repos, cmpreposSize);
-            printf("size of compressed repos = %.2lf MB, %zu bytes\n", 1. * (cmpreposSize + cmpQuadsSize) / 1024 / 1024, cmpreposSize + cmpQuadsSize);
+                printf("size of repos = %.2lf MB, %zu bytes\n", 1. * (tail_repos - bytes_repos + (tail_quads - bytes_quads)) / 1024 / 1024, tail_repos - bytes_repos + (tail_quads - bytes_quads));
+                size_t cmpreposSize;
+                delete[] lossless.compress(bytes_repos, tail_repos - bytes_repos, cmpreposSize);
+                printf("size of compressed repos = %.2lf MB, %zu bytes\n", 1. * (cmpreposSize + cmpQuadsSize) / 1024 / 1024, cmpreposSize + cmpQuadsSize);
 
 #endif
 
 //            writefile("/Users/longtaozhang/compress/repos_file/hacc-33554432-eb=1e-3-combine.dat", repos, conf.num);
 //            writefile("/Users/longtaozhang/compress/repos_file/hacc-33554432-eb=1e-3-separate.dat", reposs, 3 * conf.num);
 
-            delete[] repos;
 
 #if __OUTPUT_INFO
 
-            printf("begin merge\n");
+                printf("begin merge\n");
 
 #endif
 
 #if !__soft_eb
-            uchar *bytes_data = new uchar[std::max(conf.num * 16, (size_t) 1024) +
-                                          unx.size() * 3 * sizeof(T)], *tail_data = bytes_data;
+
 #endif
 
 #if __soft_eb
-            uchar *bytes_data = new uchar[std::max(conf.num*16, (size_t)1024)], *tail_data = bytes_data;
+                uchar *bytes_data = new uchar[std::max(conf.num*16, (size_t)1024)], *tail_data = bytes_data;
 #endif
 
-            // write the basic info
-
-            SZ3::Config __conf = conf;
-            __conf.save(tail_data);
-            write(px, tail_data);
-            write(py, tail_data);
-            write(pz, tail_data);
-            write(bx, tail_data);
-            write(by, tail_data);
-            write(bz, tail_data);
-            write(nx, tail_data);
-            write(ny, tail_data);
-            write(nz, tail_data);
-            write(blknum, tail_data);
-
+                // write the basic info
+#pragma omp section
+                {
+                    SZ3::Config __conf = conf;
+                    __conf.save(tail_data);
+                    write(px, tail_data);
+                    write(py, tail_data);
+                    write(pz, tail_data);
+                    write(bx, tail_data);
+                    write(by, tail_data);
+                    write(bz, tail_data);
+                    write(nx, tail_data);
+                    write(ny, tail_data);
+                    write(nz, tail_data);
+                    write(blknum, tail_data);
+                }
+            }
+}
             // write the codes of the above 3 arrays
-
+            delete[] repos;
+            delete[] blkst;
+            delete[] quads;
+            delete[] blkcnt;
+            Timer timerWrite(true);
             write(bytes_blkst, tail_blkst - bytes_blkst, tail_data);
             delete[] bytes_blkst;
             write(bytes_blkcnt, tail_blkcnt - bytes_blkcnt, tail_data);
@@ -920,7 +951,12 @@ namespace SZ3 {
             delete[] bytes_quads;
             write(bytes_repos, tail_repos - bytes_repos, tail_data);
             delete[] bytes_repos;
+            double writeTime = timerWrite.stop();
 
+            printf("write time = %fs\n", writeTime);
+            double encodeTime = timerEncode.stop();
+
+            printf("encode time = %fs\n", encodeTime);
 #if __OUTPUT_INFO
 
             printf("end merge\n");
