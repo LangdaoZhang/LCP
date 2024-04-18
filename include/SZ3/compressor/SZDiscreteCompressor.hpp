@@ -408,7 +408,7 @@ namespace SZ3 {
         preProcessing(const Config &conf, size_t *ord, size_t *quads, size_t *repos, NodeWithOrder *vec,
                       size_t &blknum,
                       size_t *&blkst, size_t *&blkcnt) {
-
+            Timer timer(true);
 #pragma omp parallel default(none), shared(conf, vec, blknum, ord)
             {
 #pragma omp for schedule(static)
@@ -424,20 +424,36 @@ namespace SZ3 {
                 }
             }
 
-            const auto coreCount = std::thread::hardware_concurrency();
-            size_t segmentSize = 100 / coreCount;
-            size_t remainder = 100 % coreCount;
+            blkst = new size_t[blknum];
+            blkcnt = new size_t[blknum]{};
 
+            const auto coreCount = std::thread::hardware_concurrency();
+            size_t segmentSize = conf.num / coreCount;
+            size_t remainder = conf.num % coreCount;
+
+            printf("blknum : %zu\n", blknum);
+            printf("conf.num : %zu\n", conf.num);
+            printf("coreCount: %d\n", coreCount);
+            printf("segmentSize: %zu\n", segmentSize);
+
+//            size_t pre = -1;
             for (size_t nodeSegIdx = 0; nodeSegIdx < conf.num; nodeSegIdx = nodeSegIdx + segmentSize) {
+                printf("nodeSegIDx: %zu\n", nodeSegIdx);
+                printf("nodeSegIdx + segmentSize: %zu\n", nodeSegIdx + segmentSize);
                 size_t i = -1;
                 size_t j = 0;
                 size_t pre = -1;
                 size_t prequad = 0;
                 size_t prereid = 0;
-                for (size_t nodeIdx = nodeSegIdx; nodeIdx < nodeSegIdx + segmentSize && nodeIdx < conf.num; nodeIdx++) {
-                    auto *local_blkst = new size_t[segmentSize];
-                    auto *local_blkcnt = new size_t[segmentSize];
-                    NodeWithOrder &node = vec[j];
+
+                size_t innerSize = (nodeSegIdx + segmentSize < conf.num) ? segmentSize : remainder;
+                auto *local_blkst = new size_t[innerSize];
+                auto *local_blkcnt = new size_t[innerSize];
+                auto *local_quads = new size_t[innerSize];
+                auto *local_repos = new size_t[innerSize];
+
+                for (size_t nodeIdx = nodeSegIdx; nodeIdx < nodeSegIdx + innerSize && nodeIdx < conf.num; nodeIdx++,j++) {
+                    NodeWithOrder &node = vec[nodeIdx];
                     size_t id = node.id;
                     size_t quad = node.reid >> 60;
                     size_t reid = node.reid & 0x0fffffffffffffff;
@@ -449,25 +465,65 @@ namespace SZ3 {
                     } else if (quad != prequad) {
                         prereid = 0;
                     }
+//                    if (i == -1) {
+//                        i = 0;
+//                        printf("error!!\n");
+//                    }
                     ++local_blkcnt[i];
 
-                    quads[j] = quad - prequad;
-                    repos[j] = reid - prereid;
+                    local_quads[j] = quad - prequad;
+                    local_repos[j] = reid - prereid;
                     prequad = quad;
                     prereid = reid;
-
-                    delete[] local_blkcnt;
-                    delete[] local_blkst;
                 }
+                std::copy(local_blkst, local_blkst + i + 1, blkst);
+                std::copy(local_blkcnt, local_blkcnt + i + 1, blkcnt);
+                std::copy(local_quads, local_quads + innerSize, quads);
+                std::copy(local_repos, local_repos + innerSize, repos);
 
+                delete[] local_blkcnt;
+                delete[] local_blkst;
+                delete[] local_quads;
+                delete[] local_repos;
             }
-
-
-
-            if (remainder != 0) {
-                // handle last segment
-
-            }
+            printf("Done\n");
+//            blkst = new size_t[blknum];
+//            blkcnt = new size_t[blknum]{};
+//
+//            size_t i = -1;
+//            size_t pre = -1;
+//            size_t prequad = 0;
+//            size_t prereid = 0;
+//
+//            for (size_t j = 0; j < conf.num; j++) {
+//                NodeWithOrder &node = vec[j];
+//                size_t id = node.id;
+//                size_t quad = node.reid >> 60;
+//                size_t reid = node.reid & 0x0fffffffffffffff;
+//
+//                if (id != pre) {
+//                    i = i + 1;
+//                    pre = id;
+//                    blkst[i] = pre;
+//                    prequad = 0;
+//                    prereid = 0;
+//                } else if (quad != prequad) {
+//                    prereid = 0;
+//                }
+//                ++blkcnt[i];
+//                quads[j] = quad - prequad;
+//                repos[j] = reid - prereid;
+//
+//                prequad = quad;
+//                prereid = reid;
+//            }
+//            double t = timer.stop();
+//            std::cout << blknum << std::endl;
+//            std::cout << blkst[blknum - 1] << std::endl;
+//            std::cout << blkcnt[blknum - 1] << std::endl;
+//            std::cout << blkcnt[blknum / 2] << std::endl;
+//            std::cout << blkcnt[0] << std::endl;
+//            printf("preProcess time = %lf\n", t);
         }
 
         /*
