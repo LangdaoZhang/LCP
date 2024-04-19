@@ -495,39 +495,39 @@ namespace SZ3 {
                     if (!quadsBlkRange.empty()) {
                         auto last = quadsBlkRange.back();
                         quadsBlkRange.emplace_back(tid, last.rightBound + 1, last.rightBound + j);
-                        std::copy(local_quads, local_quads + j, last.rightBound + 1);
+//                        std::copy(local_quads, local_quads + j, last.rightBound + 1);
 
                     } else {
                         quadsBlkRange.emplace_back(tid, &quads[0], &quads[j - 1]);
-                        std::copy(local_quads, local_quads + j, &quads[0]);
+//                        std::copy(local_quads, local_quads + j, &quads[0]);
                     }
 
                     if (!reposBlkRange.empty()) {
                         auto last = reposBlkRange.back();
                         reposBlkRange.emplace_back(tid, last.rightBound + 1, last.rightBound + j);
-                        std::copy(local_repos, local_repos + j, last.rightBound + 1);
+//                        std::copy(local_repos, local_repos + j, last.rightBound + 1);
 
                     } else {
                         reposBlkRange.emplace_back(tid, &repos[0], &repos[j - 1]);
-                        std::copy(local_repos, local_repos + j, &repos[0]);
+//                        std::copy(local_repos, local_repos + j, &repos[0]);
                     }
 
                     if (!blkstBlkRange.empty()) {
                         auto last = blkstBlkRange.back();
                         blkstBlkRange.emplace_back(tid, last.rightBound + 1, last.rightBound + i + 1);
-                        std::copy(local_blkst, local_blkst + i + 1, last.rightBound + 1);
+//                        std::copy(local_blkst, local_blkst + i + 1, last.rightBound + 1);
                     } else {
                         blkstBlkRange.emplace_back(tid, &blkst[0], &blkst[i]);
-                        std::copy(local_blkst, local_blkst + i + 1, &blkst[0]);
+//                        std::copy(local_blkst, local_blkst + i + 1, &blkst[0]);
                     }
 
                     if (!blkcntBlkRange.empty()) {
                         auto last = blkcntBlkRange.back();
                         blkcntBlkRange.emplace_back(tid, last.rightBound + 1, last.rightBound + i + 1);
-                        std::copy(local_blkcnt, local_blkcnt + i + 1, last.rightBound + 1);
+//                        std::copy(local_blkcnt, local_blkcnt + i + 1, last.rightBound + 1);
                     } else {
                         blkcntBlkRange.emplace_back(tid, &blkcnt[0], &blkcnt[i]);
-                        std::copy(local_blkcnt, local_blkcnt + i + 1, &blkcnt[0]);
+//                        std::copy(local_blkcnt, local_blkcnt + i + 1, &blkcnt[0]);
                     }
                 };
 
