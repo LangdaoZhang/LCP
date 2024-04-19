@@ -1026,6 +1026,10 @@ namespace SZ3 {
             printf("total bytes = %zu\n",compressed_size);
 
 #endif
+            blkcntBlkRange.clear();
+            blkstBlkRange.clear();
+            quadsBlkRange.clear();
+            reposBlkRange.clear();
 
             return lossless_data;
         }
