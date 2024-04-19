@@ -443,7 +443,7 @@ namespace SZ3 {
             blkst = new size_t[blknum];
             blkcnt = new size_t[blknum]{};
 
-            auto coreCount = std::thread::hardware_concurrency();
+            auto coreCount = std::thread::hardware_concurrency() - 1;
             size_t segmentSize = conf.num / coreCount;
             size_t complement = conf.num  % segmentSize == 0 ? 0 : coreCount - conf.num % coreCount;
 
@@ -452,7 +452,7 @@ namespace SZ3 {
             printf("coreCount: %d\n", coreCount);
             printf("segmentSize: %zu\n", segmentSize);
             printf("complement: %zu\n", complement);
-            #pragma omp parallel for default(none) firstprivate(segmentSize, conf, complement) shared(vec, blkst, blkcnt, quads, repos, quadsBlkRange, reposBlkRange, blkstBlkRange, blkcntBlkRange)
+            #pragma omp parallel for default(none) firstprivate(segmentSize, conf, complement) shared(vec, blkst, blkcnt, quads, repos, quadsBlkRange, reposBlkRange, blkstBlkRange, blkcntBlkRange) num_threads(conf.num % segmentSize == 0 ? coreCount : coreCount + 1)
             for (size_t nodeSegIdx = 0; nodeSegIdx < conf.num + complement; nodeSegIdx = nodeSegIdx + segmentSize) {
                 int tid = omp_get_thread_num();
                 size_t i = -1;
@@ -536,7 +536,6 @@ namespace SZ3 {
                 delete[] local_quads;
                 delete[] local_repos;
             }
-
             // sort by tid; NOTICE: tid may be repeated
             std::sort(blkstBlkRange.begin(), blkstBlkRange.end());
             std::sort(blkcntBlkRange.begin(), blkcntBlkRange.end());
