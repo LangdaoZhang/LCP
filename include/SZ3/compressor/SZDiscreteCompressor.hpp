@@ -67,6 +67,10 @@ namespace SZ3 {
             TidMemoRange(int id, size_t* left, size_t* right) :
                     tid(id), leftBound(left), rightBound(right) {
             }
+
+            bool operator<(const TidMemoRange& other) const {
+                return tid < other.tid;
+            }
         };
 
 //        T sq(T x){return x*x;}
@@ -417,9 +421,9 @@ namespace SZ3 {
 
         void
         preProcessing(const Config &conf, size_t *ord, size_t *quads, size_t *repos, NodeWithOrder *vec,
-                      size_t &blknum, size_t *&blkst, size_t *&blkcnt, std::vector<TidMemoRange> quadsBlkRange,
-                      std::vector<TidMemoRange> reposBlkRange, std::vector<TidMemoRange> blkstBlkRange,
-                      std::vector<TidMemoRange> blkcntBlkRange) {
+                      size_t &blknum, size_t *&blkst, size_t *&blkcnt, std::vector<TidMemoRange> &quadsBlkRange,
+                      std::vector<TidMemoRange> &reposBlkRange, std::vector<TidMemoRange> &blkstBlkRange,
+                      std::vector<TidMemoRange> &blkcntBlkRange) {
             Timer timer(true);
             #pragma omp parallel default(none), shared(conf, vec, blknum, ord)
             {
@@ -448,7 +452,7 @@ namespace SZ3 {
             printf("coreCount: %d\n", coreCount);
             printf("segmentSize: %zu\n", segmentSize);
 
-            #pragma omp parallel for default(none) shared(vec, blkst, blkcnt, quads, repos, conf, segmentSize, remainder, quadsBlkRange, reposBlkRange, blkstBlkRange, blkcntBlkRange)
+            #pragma omp parallel for default(none) firstprivate(segmentSize, conf, remainder) shared(vec, blkst, blkcnt, quads, repos, quadsBlkRange, reposBlkRange, blkstBlkRange, blkcntBlkRange)
             for (size_t nodeSegIdx = 0; nodeSegIdx <= conf.num; nodeSegIdx = nodeSegIdx + segmentSize) {
                 int tid = omp_get_thread_num();
                 size_t i = -1;
@@ -536,7 +540,12 @@ namespace SZ3 {
                 delete[] local_quads;
                 delete[] local_repos;
             }
-            printf("Done\n");
+
+            // sort by tid; NOTICE: tid may be repeated
+            std::sort(blkstBlkRange.begin(), blkstBlkRange.end());
+            std::sort(blkcntBlkRange.begin(), blkcntBlkRange.end());
+            std::sort(quadsBlkRange.begin(), quadsBlkRange.end());
+            std::sort(reposBlkRange.begin(), reposBlkRange.end());
 //            blkst = new size_t[blknum];
 //            blkcnt = new size_t[blknum]{};
 //
