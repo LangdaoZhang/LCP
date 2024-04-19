@@ -445,15 +445,15 @@ namespace SZ3 {
 
             auto coreCount = std::thread::hardware_concurrency();
             size_t segmentSize = conf.num / coreCount;
-            size_t remainder = conf.num % coreCount;
+            size_t complement = conf.num  % segmentSize == 0 ? 0 : segmentSize - conf.num % segmentSize;
 
             printf("blknum : %zu\n", blknum);
             printf("conf.num : %zu\n", conf.num);
             printf("coreCount: %d\n", coreCount);
             printf("segmentSize: %zu\n", segmentSize);
 
-            #pragma omp parallel for default(none) firstprivate(segmentSize, conf, remainder) shared(vec, blkst, blkcnt, quads, repos, quadsBlkRange, reposBlkRange, blkstBlkRange, blkcntBlkRange)
-            for (size_t nodeSegIdx = 0; nodeSegIdx <= conf.num; nodeSegIdx = nodeSegIdx + segmentSize) {
+            #pragma omp parallel for default(none) firstprivate(segmentSize, conf, complement) shared(vec, blkst, blkcnt, quads, repos, quadsBlkRange, reposBlkRange, blkstBlkRange, blkcntBlkRange)
+            for (size_t nodeSegIdx = 0; nodeSegIdx < conf.num + complement; nodeSegIdx = nodeSegIdx + segmentSize) {
                 int tid = omp_get_thread_num();
                 size_t i = -1;
                 size_t j = 0;
@@ -461,18 +461,14 @@ namespace SZ3 {
                 size_t prequad = 0;
                 size_t prereid = 0;
 
-                size_t innerSize = (nodeSegIdx + segmentSize <= conf.num) ? segmentSize : remainder;
-                if (innerSize == 0) {
-                    continue;
-                }
-                printf("tid %d, start %zu, end %zu\n", tid,  nodeSegIdx, nodeSegIdx + innerSize);
+                printf("tid %d, start %zu, end %zu\n", tid,  nodeSegIdx, nodeSegIdx + segmentSize);
 
-                auto *local_blkst = new size_t[innerSize];
-                auto *local_blkcnt = new size_t[innerSize];
-                auto *local_quads = new size_t[innerSize];
-                auto *local_repos = new size_t[innerSize];
+                auto *local_blkst = new size_t[segmentSize];
+                auto *local_blkcnt = new size_t[segmentSize];
+                auto *local_quads = new size_t[segmentSize];
+                auto *local_repos = new size_t[segmentSize];
 
-                for (size_t nodeIdx = nodeSegIdx; nodeIdx < nodeSegIdx + innerSize && nodeIdx < conf.num; nodeIdx++, j++) {
+                for (size_t nodeIdx = nodeSegIdx; nodeIdx < nodeSegIdx + segmentSize && nodeIdx < conf.num; nodeIdx++, j++) {
                     NodeWithOrder &node = vec[nodeIdx];
                     size_t id = node.id;
                     size_t quad = node.reid >> 60;
