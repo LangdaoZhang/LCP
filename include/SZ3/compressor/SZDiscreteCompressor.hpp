@@ -445,13 +445,13 @@ namespace SZ3 {
 
             auto coreCount = std::thread::hardware_concurrency();
             size_t segmentSize = conf.num / coreCount;
-            size_t complement = conf.num  % segmentSize == 0 ? 0 : segmentSize - conf.num % segmentSize;
+            size_t complement = conf.num  % segmentSize == 0 ? 0 : coreCount - conf.num % coreCount;
 
             printf("blknum : %zu\n", blknum);
             printf("conf.num : %zu\n", conf.num);
             printf("coreCount: %d\n", coreCount);
             printf("segmentSize: %zu\n", segmentSize);
-
+            printf("complement: %zu\n", complement);
             #pragma omp parallel for default(none) firstprivate(segmentSize, conf, complement) shared(vec, blkst, blkcnt, quads, repos, quadsBlkRange, reposBlkRange, blkstBlkRange, blkcntBlkRange)
             for (size_t nodeSegIdx = 0; nodeSegIdx < conf.num + complement; nodeSegIdx = nodeSegIdx + segmentSize) {
                 int tid = omp_get_thread_num();
