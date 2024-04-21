@@ -17,7 +17,10 @@
 #include <cstring>
 #include <algorithm>
 #include <math.h>
+#include <thread>
 #include <iostream>
+
+#include "omp.h"
 
 #define __OUTPUT_INFO 0
 #define __soft_eb 0
@@ -411,6 +414,8 @@ namespace SZ3 {
          * after compression, datax, datay, dataz will not increase
          */
 
+        size_t size = 1;
+
         uchar *compressSimpleBlocking(const Config &conf, T *datax, T *datay, T *dataz, size_t &compressed_size,
                                       size_t *ord = nullptr, uchar blkflag = 0x03, size_t bx_ = 0, size_t by_ = 0,
                                       size_t bz_ = 0) {
@@ -418,6 +423,11 @@ namespace SZ3 {
             T rx = datax[0], ry = datay[0], rz = dataz[0], px = datax[0], py = datay[0], pz = dataz[0];
 //            T rx=0, ry=0, rz=0, px=0, py=0, pz=0;
 
+            size = std::min((size_t) std::thread::hardware_concurrency(), conf.num);
+//            size = std::min((size_t) 2, conf.num);
+            omp_set_num_threads(size);
+
+#pragma omp parallel for reduction(min:px) reduction(max:rx)
             for (size_t i = 0; i < conf.num; i++) {
                 rx = std::max(rx, datax[i]);
                 px = std::min(px, datax[i]);
@@ -427,6 +437,7 @@ namespace SZ3 {
 //                datax[i] -= px;
 //            }
 
+#pragma omp parallel for reduction(min:py) reduction(max:ry)
             for (size_t i = 0; i < conf.num; i++) {
                 ry = std::max(ry, datay[i]);
                 py = std::min(py, datay[i]);
@@ -436,6 +447,7 @@ namespace SZ3 {
 //                datay[i] -= py;
 //            }
 
+#pragma omp parallel for reduction(min:pz) reduction(max:rz)
             for (size_t i = 0; i < conf.num; i++) {
                 rz = std::max(rz, dataz[i]);
                 pz = std::min(pz, dataz[i]);
@@ -523,12 +535,20 @@ namespace SZ3 {
 
 #endif
 
-            size_t blknum = 1;
+//            size_t blknum = 1;
 
-            size_t *blkst = nullptr;
-            size_t *blkcnt = nullptr;
+//            size_t blknums[size];
+//            memset(blknums, 0x00, size * sizeof(size_t));
+
+            size_t *blkst = new size_t[conf.num];
+            size_t *blkcnt = new size_t[conf.num]{};
             size_t *quads = new size_t[conf.num];
             size_t *repos = new size_t[conf.num];
+
+            size_t *blkst_heads[size], *blkst_tails[size];
+            size_t *blkcnt_heads[size], *blkcnt_tails[size];
+
+
 //            size_t *reposs = new size_t[conf.num * 3], *reposx = reposs, *reposy = reposx + conf.num, *reposz = reposy + conf.num;
 #if !__soft_eb
             size_t unid = nx * ny * nz + 1;
@@ -549,7 +569,6 @@ namespace SZ3 {
                     z = (z + 0) / 2;
 
 #if !__soft_eb
-
                     T decx = (x << 1 | 1) * conf.absErrorBound + px, decy =
                             (y << 1 | 1) * conf.absErrorBound + py, decz = (z << 1 | 1) * conf.absErrorBound + pz;
 
@@ -571,59 +590,106 @@ namespace SZ3 {
                     size_t cz = z / bz;
                     size_t dz = z % bz;
 
+                    //                    if(datax[i] >= 0.229 && datax[i] <= 0.230)
+                    //                        if(datay[i] >= 0.624 && datay[i] <= 0.625)
+                    //                            if(dataz[i] >= 0.109 && dataz[i] <= 0.110){
+                    //                                printf("i = %zu\n", i);
+                    //                                printf("b %zu %zu %zu | n %zu %zu %zu\n", bx, by, bz, nx, ny, nz);
+                    //                                printf("c %zu %zu %zu %zu | q %zu | d %zu %zu %zu %zu\n", cx / 2 + cy / 2 * nx + cz / 2 * nx * ny, cx / 2, cy / 2, cz / 2, ((cx & 1) << 0) | ((cy & 1) << 1) | ((cz & 1) << 2), (dx + dy * bx + dz * bx * by), dx, dy, dz);
+                    //                            }
+
                     Node tem(cx / 2 + cy / 2 * nx + cz / 2 * nx * ny,
-                             (dx + dy * bx + dz * bx * by) | ((cx & 1) << 60) | ((cy & 1) << 61) | ((cz & 1) << 62));
-//                    Node tem(arr3(x / bx, y / by, z / bz), dx + dy * bx + dz * bx * by);
+                                      (dx + dy * bx + dz * bx * by) | ((cx & 1) << 60) | ((cy & 1) << 61) |
+                                      ((cz & 1) << 62));
                     vec[i] = tem;
                 }
 
-//                Timer timer(true);
+                //                Timer timer(true);
 
-//                std::sort(vec,vec+conf.num,[&](Node& u, Node& v){return u.id==v.id?u.reid<v.reid:u.id<v.id;});
+                //                std::sort(vec,vec+conf.num,[&](NodeWithOrder& u, NodeWithOrder& v){return u.id==v.id?u.reid<v.reid:u.id<v.id;});
+
+                //                size_t *reposOut = new size_t[conf.num];
+                //                for(size_t i=0;i<conf.num;i++){
+                //                    reposOut[i] = vec[i].reid & 0x0fffffffffffffff;
+                //                }
+                //                char buffer[1024];
+                //                sprintf(buffer, "/Users/longtaozhang/compress/repos/exaalt-83x1077290-eb=%.0e-blksz=%zux%zux%zu.txt", conf.absErrorBound, bx, by, bz);
+                //                writeTextFile(buffer, reposOut, conf.num);
+                //                delete[] reposOut;
+
                 radix_sort<Node>(vec, vec + conf.num);
 
-//                double sort_time = timer.stop();
+                //                double sort_time = timer.stop();
 
-//                printf("sort time = %fs\n", sort_time);
+                //                printf("sort time = %fs\n", sort_time);
 
-                for (size_t i = 1; i < conf.num; i++) {
-                    if (vec[i].id != vec[i - 1].id) ++blknum;
-                }
-
-                blkst = new size_t[blknum];
-                blkcnt = new size_t[blknum]{};
-
-                size_t i = -1;
-                size_t j = 0;
-                size_t pre = -1;
-                size_t prequad = 0;
-                size_t prereid = 0;
-                for (; j < conf.num; j++) {
-                    Node &node = vec[j];
-                    size_t &id = node.id;
-                    size_t quad = node.reid >> 60;
-//                                              ++++----++++----
-                    size_t reid = node.reid & 0x0fffffffffffffff;
-
-                    if (id != pre) {
-                        blkst[++i] = pre = id;
-                        prequad = 0;
-                        prereid = 0;
-                    } else if (quad != prequad) {
-                        prereid = 0;
+#pragma omp parallel
+                {
+                    size_t rank = omp_get_thread_num();
+                    size_t stride = conf.num / size + (conf.num % size > 0 ? 1 : 0);
+                    size_t l = rank * stride, r = l + stride;
+                    if (r > conf.num) {
+                        r = conf.num;
                     }
-                    ++blkcnt[i];
 
-                    quads[j] = quad - prequad;
-                    repos[j] = reid - prereid;
-//                    reposx[j] = reid % bx;
-//                    reposy[j] = reid / bx % by;
-//                    reposz[j] = reid / bx / by;
-                    prequad = quad;
-                    prereid = reid;
+                    //                blknums[rank] = 1;
+                    //                for (size_t i = l + 1; i < r; i++) {
+                    //                    if (vec[i].id != vec[i - 1].id) ++blknums[rank];
+                    //                }
+
+                    //                blkst = new size_t[blknum];
+                    //                blkcnt = new size_t[blknum]{};
+
+                    //                size_t i = -1;
+                    size_t j = l;
+                    size_t pre = -1;
+                    size_t prequad = 0;
+                    size_t prereid = 0;
+
+                    blkst_heads[rank] = blkst + l;
+                    blkst_tails[rank] = blkst_heads[rank] - 1;
+                    blkcnt_heads[rank] = blkcnt + l;
+                    blkcnt_tails[rank] = blkcnt_heads[rank] - 1;
+
+                    for (; j < r; j++) {
+                        Node &node = vec[j];
+                        size_t id = node.id;
+                        size_t quad = node.reid >> 60;
+                        //                                              ++++----++++----
+                        size_t reid = node.reid & 0x0fffffffffffffff;
+
+                        if (id != pre) {
+                            //                        blkst[++i] = pre = id;
+                            *(++blkst_tails[rank]) = pre = id;
+                            ++blkcnt_tails[rank];
+                            prequad = 0;
+                            prereid = 0;
+                        } else if (quad != prequad) {
+                            prereid = 0;
+                        }
+                        //                    ++blkcnt[i];
+                        ++*(blkcnt_tails[rank]);
+
+                        quads[j] = quad - prequad;
+                        repos[j] = reid - prereid;
+
+                        //                    if(ord[j]==1){
+                        //                        printf("j = %zu\n", j);
+                        //                        printf("p %f %f %f | n %zu %zu %zu\n", px, py, pz, nx, ny, nz);
+                        //                        printf("data %f %f %f | blkst %zu %zu %zu %zu | quad %zu | repos %zu\n", datax[ord[j]], datay[ord[j]], dataz[ord[j]], id, id%nx, id/nx%ny, id/nx/ny, quads[j], reid);
+                        //                        printf("pre | %zu %zu\n", prequad, prereid);
+                        //                    }
+
+                        prequad = quad;
+                        prereid = reid;
+                    }
+
+                    ++blkst_tails[rank];
+                    ++blkcnt_tails[rank];
                 }
 
                 delete[] vec;
+
             } else {
 
                 NodeWithOrder *vec = new NodeWithOrder[conf.num]{};
@@ -659,13 +725,13 @@ namespace SZ3 {
                     size_t cz = z / bz;
                     size_t dz = z % bz;
 
-//                    if(datax[i] >= 0.229 && datax[i] <= 0.230)
-//                        if(datay[i] >= 0.624 && datay[i] <= 0.625)
-//                            if(dataz[i] >= 0.109 && dataz[i] <= 0.110){
-//                                printf("i = %zu\n", i);
-//                                printf("b %zu %zu %zu | n %zu %zu %zu\n", bx, by, bz, nx, ny, nz);
-//                                printf("c %zu %zu %zu %zu | q %zu | d %zu %zu %zu %zu\n", cx / 2 + cy / 2 * nx + cz / 2 * nx * ny, cx / 2, cy / 2, cz / 2, ((cx & 1) << 0) | ((cy & 1) << 1) | ((cz & 1) << 2), (dx + dy * bx + dz * bx * by), dx, dy, dz);
-//                            }
+                    //                    if(datax[i] >= 0.229 && datax[i] <= 0.230)
+                    //                        if(datay[i] >= 0.624 && datay[i] <= 0.625)
+                    //                            if(dataz[i] >= 0.109 && dataz[i] <= 0.110){
+                    //                                printf("i = %zu\n", i);
+                    //                                printf("b %zu %zu %zu | n %zu %zu %zu\n", bx, by, bz, nx, ny, nz);
+                    //                                printf("c %zu %zu %zu %zu | q %zu | d %zu %zu %zu %zu\n", cx / 2 + cy / 2 * nx + cz / 2 * nx * ny, cx / 2, cy / 2, cz / 2, ((cx & 1) << 0) | ((cy & 1) << 1) | ((cz & 1) << 2), (dx + dy * bx + dz * bx * by), dx, dy, dz);
+                    //                            }
 
                     NodeWithOrder tem(cx / 2 + cy / 2 * nx + cz / 2 * nx * ny,
                                       (dx + dy * bx + dz * bx * by) | ((cx & 1) << 60) | ((cy & 1) << 61) |
@@ -673,112 +739,160 @@ namespace SZ3 {
                     vec[i] = tem;
                 }
 
-//                Timer timer(true);
+                //                Timer timer(true);
 
-//                std::sort(vec,vec+conf.num,[&](NodeWithOrder& u, NodeWithOrder& v){return u.id==v.id?u.reid<v.reid:u.id<v.id;});
+                //                std::sort(vec,vec+conf.num,[&](NodeWithOrder& u, NodeWithOrder& v){return u.id==v.id?u.reid<v.reid:u.id<v.id;});
 
-//                size_t *reposOut = new size_t[conf.num];
-//                for(size_t i=0;i<conf.num;i++){
-//                    reposOut[i] = vec[i].reid & 0x0fffffffffffffff;
-//                }
-//                char buffer[1024];
-//                sprintf(buffer, "/Users/longtaozhang/compress/repos/exaalt-83x1077290-eb=%.0e-blksz=%zux%zux%zu.txt", conf.absErrorBound, bx, by, bz);
-//                writeTextFile(buffer, reposOut, conf.num);
-//                delete[] reposOut;
+                //                size_t *reposOut = new size_t[conf.num];
+                //                for(size_t i=0;i<conf.num;i++){
+                //                    reposOut[i] = vec[i].reid & 0x0fffffffffffffff;
+                //                }
+                //                char buffer[1024];
+                //                sprintf(buffer, "/Users/longtaozhang/compress/repos/exaalt-83x1077290-eb=%.0e-blksz=%zux%zux%zu.txt", conf.absErrorBound, bx, by, bz);
+                //                writeTextFile(buffer, reposOut, conf.num);
+                //                delete[] reposOut;
 
                 radix_sort<NodeWithOrder>(vec, vec + conf.num);
 
-//                double sort_time = timer.stop();
+                //                double sort_time = timer.stop();
 
-//                printf("sort time = %fs\n", sort_time);
+                //                printf("sort time = %fs\n", sort_time);
 
-                for (size_t i = 0; i < conf.num; i++) {
-                    ord[i] = vec[i].ord;
-                }
-
-                for (size_t i = 1; i < conf.num; i++) {
-                    if (vec[i].id != vec[i - 1].id) ++blknum;
-                }
-
-                blkst = new size_t[blknum];
-                blkcnt = new size_t[blknum]{};
-
-                size_t i = -1;
-                size_t j = 0;
-                size_t pre = -1;
-                size_t prequad = 0;
-                size_t prereid = 0;
-                for (; j < conf.num; j++) {
-                    NodeWithOrder &node = vec[j];
-                    size_t id = node.id;
-                    size_t quad = node.reid >> 60;
-//                                              ++++----++++----
-                    size_t reid = node.reid & 0x0fffffffffffffff;
-
-                    if (id != pre) {
-                        blkst[++i] = pre = id;
-                        prequad = 0;
-                        prereid = 0;
-                    } else if (quad != prequad) {
-                        prereid = 0;
+#pragma omp parallel
+                {
+                    size_t rank = omp_get_thread_num();
+                    size_t stride = conf.num / size + (conf.num % size > 0 ? 1 : 0);
+                    size_t l = rank * stride, r = l + stride;
+                    if (r > conf.num) {
+                        r = conf.num;
                     }
-                    ++blkcnt[i];
 
-                    quads[j] = quad - prequad;
-                    repos[j] = reid - prereid;
+                    for (size_t i = l; i < r; i++) {
+                        ord[i] = vec[i].ord;
+                    }
 
-//                    if(ord[j]==1){
-//                        printf("j = %zu\n", j);
-//                        printf("p %f %f %f | n %zu %zu %zu\n", px, py, pz, nx, ny, nz);
-//                        printf("data %f %f %f | blkst %zu %zu %zu %zu | quad %zu | repos %zu\n", datax[ord[j]], datay[ord[j]], dataz[ord[j]], id, id%nx, id/nx%ny, id/nx/ny, quads[j], reid);
-//                        printf("pre | %zu %zu\n", prequad, prereid);
-//                    }
+                    //                blknums[rank] = 1;
+                    //                for (size_t i = l + 1; i < r; i++) {
+                    //                    if (vec[i].id != vec[i - 1].id) ++blknums[rank];
+                    //                }
 
-                    prequad = quad;
-                    prereid = reid;
+                    //                blkst = new size_t[blknum];
+                    //                blkcnt = new size_t[blknum]{};
+
+                    //                size_t i = -1;
+                    size_t j = l;
+                    size_t pre = -1;
+                    size_t prequad = 0;
+                    size_t prereid = 0;
+
+                    blkst_heads[rank] = blkst + l;
+                    blkst_tails[rank] = blkst_heads[rank] - 1;
+                    blkcnt_heads[rank] = blkcnt + l;
+                    blkcnt_tails[rank] = blkcnt_heads[rank] - 1;
+
+                    for (; j < r; j++) {
+                        NodeWithOrder &node = vec[j];
+                        size_t id = node.id;
+                        size_t quad = node.reid >> 60;
+                        //                                              ++++----++++----
+                        size_t reid = node.reid & 0x0fffffffffffffff;
+
+                        if (id != pre) {
+                            //                        blkst[++i] = pre = id;
+                            *(++blkst_tails[rank]) = pre = id;
+                            ++blkcnt_tails[rank];
+                            prequad = 0;
+                            prereid = 0;
+                        } else if (quad != prequad) {
+                            prereid = 0;
+                        }
+                        //                    ++blkcnt[i];
+                        ++*(blkcnt_tails[rank]);
+
+                        quads[j] = quad - prequad;
+                        repos[j] = reid - prereid;
+
+                        //                    if(ord[j]==1){
+                        //                        printf("j = %zu\n", j);
+                        //                        printf("p %f %f %f | n %zu %zu %zu\n", px, py, pz, nx, ny, nz);
+                        //                        printf("data %f %f %f | blkst %zu %zu %zu %zu | quad %zu | repos %zu\n", datax[ord[j]], datay[ord[j]], dataz[ord[j]], id, id%nx, id/nx%ny, id/nx/ny, quads[j], reid);
+                        //                        printf("pre | %zu %zu\n", prequad, prereid);
+                        //                    }
+
+                        prequad = quad;
+                        prereid = reid;
+                    }
+
+                    ++blkst_tails[rank];
+                    ++blkcnt_tails[rank];
                 }
 
                 delete[] vec;
             }
 
-//            printf("blknum = %zu, conf.num = %zu, ratio = %lf\n", blknum, conf.num, 1. * conf.num / blknum);
+            size_t bytes_blkst_size = std::max(conf.num * 8, (size_t) 1024);
+            uchar *bytes_blkst = new uchar[bytes_blkst_size];
+            size_t bytes_blkcnt_size = std::max(conf.num * 8, (size_t) 1024);
+            uchar *bytes_blkcnt = new uchar[bytes_blkcnt_size];
+            size_t bytes_quads_size = std::max((size_t) ceil(conf.num * 0.4), (size_t) 1024);
+            uchar *bytes_quads = new uchar[bytes_quads_size];
+            size_t bytes_repos_size = std::max(conf.num * std::max((size_t) 4, (size_t) ceil(log2(1. * bx * by * bz))),
+                                               (size_t) 1024);
+            uchar *bytes_repos = new uchar[bytes_repos_size];
 
-//            std::vector<std::vector<size_t>> reposlist(bx*by*bz);
-//            for(size_t i=0;i<conf.num;i++){
-//                reposlist[repos[i]].push_back(i);
-//            }
-//            for(size_t b=0;b<bx*by*bz;b++){
-//                if(reposlist[b].size()>0)
-//                for(size_t i=reposlist[b].size()-1;i>0;i--){
-//                    reposlist[b][i] -= reposlist[b][i-1];
-//                }
-//            }
+            uchar *bytes_blkst_heads[size], *bytes_blkst_tails[size];
+            uchar *bytes_blkcnt_heads[size], *bytes_blkcnt_tails[size];
+            uchar *bytes_quads_heads[size], *bytes_quads_tails[size];
+            uchar *bytes_repos_heads[size], *bytes_repos_tails[size];
 
-            // record the difference array
-
-            for (size_t i = blknum - 1; i > 0; i--) {
-                blkst[i] -= blkst[i - 1];
+            size_t blknums_sum = 0;
+            for (size_t i = 0; i < size; i++) {
+                blknums_sum += blkst_tails[i] - blkst_heads[i];
             }
 
-            // use huffman encoder to compress the block bases
-            uchar *bytes_blkst = new uchar[std::max(blknum * 8, (size_t) 1024)], *tail_blkst = bytes_blkst;
+#pragma omp parallel private(encoder)
+            {
+                size_t rank = omp_get_thread_num();
+                size_t stride = conf.num / size + (conf.num % size > 0 ? 1 : 0);
+                size_t l = rank * stride, r = l + stride;
+                if (r > conf.num) {
+                    r = conf.num;
+                }
+
+                bytes_blkst_heads[rank] = bytes_blkst + bytes_blkst_size / size * rank;
+                bytes_blkst_tails[rank] = bytes_blkst_heads[rank];
+                bytes_blkcnt_heads[rank] = bytes_blkcnt + bytes_blkcnt_size / size * rank;
+                bytes_blkcnt_tails[rank] = bytes_blkcnt_heads[rank];
+                bytes_quads_heads[rank] = bytes_quads + bytes_quads_size / size * rank;
+                bytes_quads_tails[rank] = bytes_quads_heads[rank];
+                bytes_repos_heads[rank] = bytes_repos + bytes_repos_size / size * rank;
+                bytes_repos_tails[rank] = bytes_repos_heads[rank];
+
+                // record the difference array
+
+                for (size_t *it = blkst_tails[rank] - 1; it > blkst_heads[rank]; it--) {
+                    *(it) -= *(it - 1);
+                }
+
+                // use huffman encoder to compress the block bases
+
 //            printf("+++flag = %.2lf\n",1.*nx*ny*nz/blknum);
-            encoder.preprocess_encode(blkst, blknum, 0, (1. * nx * ny * nz / blknum > 1e6 ? 1 : 0));
-            encoder.save(tail_blkst);
-            encoder.encode(blkst, blknum, tail_blkst);
+
+                encoder.preprocess_encode(blkst_heads[rank], blkst_tails[rank] - blkst_heads[rank], 0,
+                                          (1. * nx * ny * nz / blknums_sum > 1e6 ? 1 : 0));
+                encoder.save(bytes_blkst_tails[rank]);
+                encoder.encode(blkst_heads[rank], blkst_tails[rank] - blkst_heads[rank], bytes_blkst_tails[rank]);
 
 #if __OUTPUT_INFO
 
-            printf("size of blkst = %.2lf MB, %zu bytes\n", 1. * (tail_blkst - bytes_blkst) / 1024 / 1024, tail_blkst - bytes_blkst);
-            size_t cmpblkstSize;
-            delete[] lossless.compress(bytes_blkst, tail_blkst - bytes_blkst, cmpblkstSize);
-            printf("size of compressed blkst = %.2lf MB, %zu bytes\n", 1. * cmpblkstSize / 1024 / 1024, cmpblkstSize);
+                printf("size of blkst = %.2lf MB, %zu bytes\n", 1. * (tail_blkst - bytes_blkst) / 1024 / 1024, tail_blkst - bytes_blkst);
+                size_t cmpblkstSize;
+                delete[] lossless.compress(bytes_blkst, tail_blkst - bytes_blkst, cmpblkstSize);
+                printf("size of compressed blkst = %.2lf MB, %zu bytes\n", 1. * cmpblkstSize / 1024 / 1024, cmpblkstSize);
 
 #endif
 
-            delete[] blkst;
-
-            // use huffman encoder to compress the number of points in each block
+                // use huffman encoder to compress the number of points in each block
 
 //            if(blkflag != 0x00){
 //                size_t tem = 0;
@@ -788,53 +902,43 @@ namespace SZ3 {
 //                printf("%zu\n", tem);
 //            }
 
-
-            uchar *bytes_blkcnt = new uchar[std::max(blknum * 8, (size_t) 1024)], *tail_blkcnt = bytes_blkcnt;
-            encoder.preprocess_encode(blkcnt, blknum, 0, 0xc0);
-            encoder.save(tail_blkcnt);
-            encoder.encode(blkcnt, blknum, tail_blkcnt);
+                encoder.preprocess_encode(blkcnt_heads[rank], blkcnt_tails[rank] - blkcnt_heads[rank], 0, 0xc0);
+                encoder.save(bytes_blkcnt_tails[rank]);
+                encoder.encode(blkcnt_heads[rank], blkcnt_tails[rank] - blkcnt_heads[rank], bytes_blkcnt_tails[rank]);
 
 #if __OUTPUT_INFO
 
-            printf("size of blkcnt = %.2lf MB, %zu bytes\n", 1. * (tail_blkcnt - bytes_blkcnt) / 1024 / 1024, tail_blkcnt - bytes_blkcnt);
-            size_t cmpblkcntSize;
-            delete[] lossless.compress(bytes_blkcnt, tail_blkcnt - bytes_blkcnt, cmpblkcntSize);
-            printf("size of compressed blkcnt = %.2lf MB, %zu bytes\n", 1. * cmpblkcntSize / 1024 / 1024, cmpblkcntSize);
+                printf("size of blkcnt = %.2lf MB, %zu bytes\n", 1. * (tail_blkcnt - bytes_blkcnt) / 1024 / 1024, tail_blkcnt - bytes_blkcnt);
+                size_t cmpblkcntSize;
+                delete[] lossless.compress(bytes_blkcnt, tail_blkcnt - bytes_blkcnt, cmpblkcntSize);
+                printf("size of compressed blkcnt = %.2lf MB, %zu bytes\n", 1. * cmpblkcntSize / 1024 / 1024, cmpblkcntSize);
 
 #endif
-
-            delete[] blkcnt;
 
 //            for(size_t i=0;i<conf.num;i++){
 //                printf("%zu", quads[i]);
 //            }
 //            printf("\n");
 
-            uchar *bytes_quads = new uchar[std::max((size_t) ceil(conf.num * 0.4),
-                                                    (size_t) 1024)], *tail_quads = bytes_quads;
-            encoder.preprocess_encode(quads, conf.num, 8, 0xc1);
-            encoder.save(tail_quads);
-            encoder.encode(quads, conf.num, tail_quads);
+                encoder.preprocess_encode(quads + l, r - l, 8, 0xc1);
+                encoder.save(bytes_quads_tails[rank]);
+                encoder.encode(quads + l, r - l, bytes_quads_tails[rank]);
 
 #if __OUTPUT_INFO
 
-            //            printf("size of quads = %.2lf MB, %zu bytes\n", 1. * (tail_quads - bytes_quads) / 1024 / 1024, tail_quads - bytes_quads);
-                        size_t cmpQuadsSize;
-                        delete[] lossless.compress(bytes_quads, tail_quads - bytes_quads, cmpQuadsSize);
-            //            printf("size of compressed blkcnt = %.2lf MB, %zu bytes\n", 1. * cmpQuadsSize / 1024 / 1024, cmpQuadsSize);
+                //            printf("size of quads = %.2lf MB, %zu bytes\n", 1. * (tail_quads - bytes_quads) / 1024 / 1024, tail_quads - bytes_quads);
+                            size_t cmpQuadsSize;
+                            delete[] lossless.compress(bytes_quads, tail_quads - bytes_quads, cmpQuadsSize);
+                //            printf("size of compressed blkcnt = %.2lf MB, %zu bytes\n", 1. * cmpQuadsSize / 1024 / 1024, cmpQuadsSize);
 
 #endif
 
-            delete[] quads;
+                // use huffman encoder to encode the relative error of each point
 
-            // use huffman encoder to encode the relative error of each point
 
-            uchar *bytes_repos = new uchar[std::max(
-                    conf.num * std::max((size_t) 4, (size_t) ceil(log2(1. * bx * by * bz))),
-                    (size_t) 1024)], *tail_repos = bytes_repos;
-            encoder.preprocess_encode(repos, conf.num, 0, 0xc1);
-            encoder.save(tail_repos);
-            encoder.encode(repos, conf.num, tail_repos);
+                encoder.preprocess_encode(repos + l, r - l, 0, 0xc1);
+                encoder.save(bytes_repos_tails[rank]);
+                encoder.encode(repos + l, r - l, bytes_repos_tails[rank]);
 
 //            uchar *bytes_repos = new uchar[std::max(conf.num * std::max((size_t)16, (size_t)ceil(log2(1. * bx * by * bz))), (size_t)1024)], *tail_repos = bytes_repos;
 ////            for(size_t i=0;i<conf.num;i++) printf("%zu", reposx[i]);
@@ -868,23 +972,28 @@ namespace SZ3 {
 
 #if __OUTPUT_INFO
 
-            printf("size of repos = %.2lf MB, %zu bytes\n", 1. * (tail_repos - bytes_repos + (tail_quads - bytes_quads)) / 1024 / 1024, tail_repos - bytes_repos + (tail_quads - bytes_quads));
-            size_t cmpreposSize;
-            delete[] lossless.compress(bytes_repos, tail_repos - bytes_repos, cmpreposSize);
-            printf("size of compressed repos = %.2lf MB, %zu bytes\n", 1. * (cmpreposSize + cmpQuadsSize) / 1024 / 1024, cmpreposSize + cmpQuadsSize);
+                printf("size of repos = %.2lf MB, %zu bytes\n", 1. * (tail_repos - bytes_repos + (tail_quads - bytes_quads)) / 1024 / 1024, tail_repos - bytes_repos + (tail_quads - bytes_quads));
+                size_t cmpreposSize;
+                delete[] lossless.compress(bytes_repos, tail_repos - bytes_repos, cmpreposSize);
+                printf("size of compressed repos = %.2lf MB, %zu bytes\n", 1. * (cmpreposSize + cmpQuadsSize) / 1024 / 1024, cmpreposSize + cmpQuadsSize);
 
 #endif
 
 //            writefile("/Users/longtaozhang/compress/repos_file/hacc-33554432-eb=1e-3-combine.dat", repos, conf.num);
 //            writefile("/Users/longtaozhang/compress/repos_file/hacc-33554432-eb=1e-3-separate.dat", reposs, 3 * conf.num);
 
-            delete[] repos;
-
 #if __OUTPUT_INFO
 
-            printf("begin merge\n");
+                printf("begin merge\n");
 
 #endif
+
+            }
+
+            delete[] blkst;
+            delete[] blkcnt;
+            delete[] quads;
+            delete[] repos;
 
 #if !__soft_eb
             uchar *bytes_data = new uchar[std::max(conf.num * 16, (size_t) 1024) +
@@ -908,24 +1017,20 @@ namespace SZ3 {
             write(nx, tail_data);
             write(ny, tail_data);
             write(nz, tail_data);
-            write(blknum, tail_data);
+//            write(blknum, tail_data);
+            write(size, tail_data);
+            for (size_t i = 0; i < size; i++) {
+                write(blkst_tails[i] - blkst_heads[i], tail_data);
+            }
 
-            // write the codes of the above 3 arrays
+            for (size_t i = 0, s = 0; i < size; i++) {
+                write(s, tail_data);
+                s += (bytes_blkst_tails[i] - bytes_blkst_heads[i])
+                     + (bytes_blkcnt_tails[i] - bytes_blkcnt_heads[i])
+                     + (bytes_quads_tails[i] - bytes_quads_heads[i])
+                     + (bytes_repos_tails[i] - bytes_repos_heads[i]);
+            }
 
-            write(bytes_blkst, tail_blkst - bytes_blkst, tail_data);
-            delete[] bytes_blkst;
-            write(bytes_blkcnt, tail_blkcnt - bytes_blkcnt, tail_data);
-            delete[] bytes_blkcnt;
-            write(bytes_quads, tail_quads - bytes_quads, tail_data);
-            delete[] bytes_quads;
-            write(bytes_repos, tail_repos - bytes_repos, tail_data);
-            delete[] bytes_repos;
-
-#if __OUTPUT_INFO
-
-            printf("end merge\n");
-
-#endif
 
 #if !__soft_eb
 //            printf("unpred = %zu\n", unx.size());
@@ -933,6 +1038,47 @@ namespace SZ3 {
             write(unx.data(), unx.size(), tail_data);
             write(uny.data(), uny.size(), tail_data);
             write(unz.data(), unz.size(), tail_data);
+#endif
+
+            uchar *bytes_data_tails[size];
+            bytes_data_tails[0] = tail_data;
+            for (size_t i = 1; i < size; i++) {
+                bytes_data_tails[i] = bytes_data_tails[i - 1]
+                                      + (bytes_blkst_tails[i - 1] - bytes_blkst_heads[i - 1])
+                                      + (bytes_blkcnt_tails[i - 1] - bytes_blkcnt_heads[i - 1])
+                                      + (bytes_quads_tails[i - 1] - bytes_quads_heads[i - 1])
+                                      + (bytes_repos_tails[i - 1] - bytes_repos_heads[i - 1]);
+            }
+
+#pragma omp parallel
+            {
+
+                // write the codes of the above 4 arrays
+
+                size_t rank = omp_get_thread_num();
+
+                uchar *tem = bytes_data_tails[rank];
+
+                write(bytes_blkst_heads[rank], bytes_blkst_tails[rank] - bytes_blkst_heads[rank],
+                      bytes_data_tails[rank]);
+                write(bytes_blkcnt_heads[rank], bytes_blkcnt_tails[rank] - bytes_blkcnt_heads[rank],
+                      bytes_data_tails[rank]);
+                write(bytes_quads_heads[rank], bytes_quads_tails[rank] - bytes_quads_heads[rank],
+                      bytes_data_tails[rank]);
+                write(bytes_repos_heads[rank], bytes_repos_tails[rank] - bytes_repos_heads[rank],
+                      bytes_data_tails[rank]);
+            }
+            delete[] bytes_blkst;
+            delete[] bytes_blkcnt;
+            delete[] bytes_quads;
+            delete[] bytes_repos;
+
+            tail_data = bytes_data_tails[size - 1];
+
+#if __OUTPUT_INFO
+
+            printf("end merge\n");
+
 #endif
 
             uchar *lossless_data = lossless.compress(bytes_data, tail_data - bytes_data, compressed_size);
@@ -1243,7 +1389,7 @@ namespace SZ3 {
                     memcpy(p, ord1, n * sizeof(size_t));
                 } else {
 
-                    if(fflag > 1){
+                    if (fflag > 1) {
                         fflag = 1;
                         conf1.absErrorBound = conf.absErrorBound;
                     }
@@ -1331,7 +1477,7 @@ namespace SZ3 {
                     errlen += n;
                 } else {
 
-                    if(fflag > 1){
+                    if (fflag > 1) {
                         fflag = 1;
                         conf1.absErrorBound = conf.absErrorBound;
                     }
@@ -1403,9 +1549,9 @@ namespace SZ3 {
             return lossless_data;
         }
 
-        uchar isSpatialWorse(const Config conf, T *datax, T *datay, T *dataz){
+        uchar isSpatialWorse(const Config conf, T *datax, T *datay, T *dataz) {
 
-            const size_t& n = conf.dims[1];
+            const size_t &n = conf.dims[1];
             LinearQuantizer<T> quantizer(conf.absErrorBound, (1 << 15));
 
             size_t *err = new size_t[3 * n], *errx = err, *erry = errx + n, *errz = erry + n;
@@ -1481,7 +1627,7 @@ namespace SZ3 {
                 }
                 if (fail == 0) {
                     size_t t = (nt - 1) / 2;
-                    if (isSpatialWorse(conf, datax + t * n, datay + t * n, dataz + t * n)){
+                    if (isSpatialWorse(conf, datax + t * n, datay + t * n, dataz + t * n)) {
                         fflag = 0x0a;
                     }
                 }
@@ -1674,7 +1820,7 @@ namespace SZ3 {
             if (dataz == nullptr) dataz = new T[conf.num];
 
             T px, py, pz;
-            size_t bx, by, bz, nx, ny, nz, blknum;
+            size_t bx, by, bz, nx, ny, nz;
 
             read(px, cmpData);
             read(py, cmpData);
@@ -1699,21 +1845,17 @@ namespace SZ3 {
             read(nx, cmpData);
             read(ny, cmpData);
             read(nz, cmpData);
-            read(blknum, cmpData);
 
-            size_t remaining_length = 0;
+            read(size, cmpData);
+            size_t blknums[size];
+            for (size_t i = 0; i < size; i++) {
+                read(blknums[i], cmpData);
+            }
 
-            encoder.load(cmpData, remaining_length);
-            auto blkst = encoder.decode(cmpData, blknum);
-
-            encoder.load(cmpData, remaining_length);
-            auto blkcnt = encoder.decode(cmpData, blknum);
-
-            encoder.load(cmpData, remaining_length);
-            auto quads = encoder.decode(cmpData, conf.num);
-
-            encoder.load(cmpData, remaining_length);
-            auto repos = encoder.decode(cmpData, conf.num);
+            size_t offset[size];
+            for (size_t i = 0; i < size; i++) {
+                read(offset[i], cmpData);
+            }
 
 #if !__soft_eb
             size_t cnt_unquants, unid = nx * ny * nz + 1;
@@ -1724,48 +1866,86 @@ namespace SZ3 {
             read(unz.data(), cnt_unquants, cmpData);
 #endif
 
-            size_t i = 0, j = 0;
-            for (; i < blknum; i++) {
+            omp_set_num_threads(size);
 
-                if (i) blkst[i] += blkst[i - 1];
+#pragma omp parallel private(encoder)
+            {
+                size_t rank = omp_get_thread_num();
+                size_t stride = conf.num / size + (conf.num % size > 0 ? 1 : 0);
+                size_t l = rank * stride, r = l + stride;
+                if (r > conf.num) {
+                    r = conf.num;
+                }
+
+                size_t remaining_length = 0;
+
+                const uchar *tail = cmpData + offset[rank];
+
+                encoder.load(tail, remaining_length);
+                auto blkst = encoder.decode(tail, blknums[rank]);
+
+                encoder.load(tail, remaining_length);
+                auto blkcnt = encoder.decode(tail, blknums[rank]);
+
+                encoder.load(tail, remaining_length);
+                auto quads = encoder.decode(tail, r - l);
+
+                encoder.load(tail, remaining_length);
+                auto repos = encoder.decode(tail, r - l);
+
+                size_t i = 0, j = 0;
+                for (; i < blknums[rank]; i++) {
+
+                    if (i) blkst[i] += blkst[i - 1];
+
+                    size_t pbx = (blkst[i] % nx * 2) * bx;
+                    size_t pby = (blkst[i] / nx % ny * 2) * by;
+                    size_t pbz = (blkst[i] / nx / ny * 2) * bz;
+
+                    size_t prequad = 0;
+                    size_t prerepos = 0;
 
 #if !__soft_eb
 
-                if (blkst[i] == unid) {
+                    if (blkst[i] == unid) {
 
-                    for (size_t j_ = 0; j_ < blkcnt[i]; j_++) {
-                        datax[j] = unx[j_];
-                        datay[j] = uny[j_];
-                        dataz[j] = unz[j_];
-                        ++j;
+                        for (size_t j_ = 0; j_ < blkcnt[i]; j_++) {
+
+                            if (quads[j] != 0) prerepos = 0;
+                            size_t reposj = repos[j] + prerepos;
+                            size_t quadj = quads[j] + prequad;
+                            prerepos = reposj;
+                            prequad = quadj;
+
+                            datax[j + l] = unx[reposj];
+                            datay[j + l] = uny[reposj];
+                            dataz[j + l] = unz[reposj];
+
+                            ++j;
+                        }
+
+                        continue;
                     }
-                    continue;
-                }
+
 #endif
 
-                size_t pbx = (blkst[i] % nx * 2) * bx;
-                size_t pby = (blkst[i] / nx % ny * 2) * by;
-                size_t pbz = (blkst[i] / nx / ny * 2) * bz;
+                    for (size_t j_ = 0; j_ < blkcnt[i]; j_++) {
 
-                size_t prequad = 0;
-                size_t prerepos = 0;
+                        if (quads[j] != 0) prerepos = 0;
+                        size_t reposj = repos[j] + prerepos;
+                        size_t quadj = quads[j] + prequad;
+                        prerepos = reposj;
+                        prequad = quadj;
 
-                for (size_t j_ = 0; j_ < blkcnt[i]; j_++) {
+                        size_t idx = (pbx + ((quadj & 0x01) >> 0) * bx + (reposj % bx));
+                        datax[j + l] = (idx << 1 | 1) * conf.absErrorBound + px;
+                        size_t idy = (pby + ((quadj & 0x02) >> 1) * by + (reposj / bx % by));
+                        datay[j + l] = (idy << 1 | 1) * conf.absErrorBound + py;
+                        size_t idz = (pbz + ((quadj & 0x04) >> 2) * bz + (reposj / bx / by));
+                        dataz[j + l] = (idz << 1 | 1) * conf.absErrorBound + pz;
 
-                    if (quads[j] != 0) prerepos = 0;
-                    size_t reposj = repos[j] + prerepos;
-                    size_t quadj = quads[j] + prequad;
-                    prerepos = reposj;
-                    prequad = quadj;
-
-                    size_t idx = (pbx + ((quadj & 0x01) >> 0) * bx + (reposj % bx));
-                    datax[j] = (idx << 1 | 1) * conf.absErrorBound + px;
-                    size_t idy = (pby + ((quadj & 0x02) >> 1) * by + (reposj / bx % by));
-                    datay[j] = (idy << 1 | 1) * conf.absErrorBound + py;
-                    size_t idz = (pbz + ((quadj & 0x04) >> 2) * bz + (reposj / bx / by));
-                    dataz[j] = (idz << 1 | 1) * conf.absErrorBound + pz;
-
-                    ++j;
+                        ++j;
+                    }
                 }
             }
 
