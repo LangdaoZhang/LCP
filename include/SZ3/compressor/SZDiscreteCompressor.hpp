@@ -69,8 +69,12 @@ namespace SZ3 {
         public:
 
             BlockSizeCache() {
+                init();
+            }
+
+            void init() {
                 flag = 0x00;
-                c = -1;
+                c = 0;
             }
 
             uchar isHit() {
@@ -1140,7 +1144,7 @@ namespace SZ3 {
                                                                    size_t &compressed_size, size_t *ord, uchar blkflag,
                                                                    size_t bx, size_t by, size_t bz, uchar *&bytes1,
                                                                    size_t &compressed_size1, size_t *ord1,
-                                                                   uchar fflag) {
+                                                                   T fflag) {
 
             static const int64_t radius = (1 << 15);
 
@@ -1153,6 +1157,8 @@ namespace SZ3 {
 
             Config conf1(n);
             conf1.absErrorBound = conf.absErrorBound / fflag;
+            T fflag_stride = std::min(std::max((fflag - 1) / (nt / (T) 4), (T) 0), (T) 2);
+            printf("fflag stride = %.2f\n", fflag_stride);
 
             size_t *p = new size_t[n];
 
@@ -1244,8 +1250,9 @@ namespace SZ3 {
                 } else {
 
                     if(fflag > 1){
-                        fflag = 1;
-                        conf1.absErrorBound = conf.absErrorBound;
+                        fflag -= fflag_stride;
+                        if(fflag < 1) fflag = 1;
+                        conf1.absErrorBound = conf.absErrorBound / fflag;
                     }
 
 #if __batch_info
@@ -1332,8 +1339,10 @@ namespace SZ3 {
                 } else {
 
                     if(fflag > 1){
-                        fflag = 1;
-                        conf1.absErrorBound = conf.absErrorBound;
+                        fflag -= fflag_stride;
+                        if(fflag < 1) fflag = 1;
+                        if(nt - t <= 2) fflag = 1;
+                        conf1.absErrorBound = conf.absErrorBound / fflag;
                     }
 
 #if __batch_info
@@ -1462,7 +1471,7 @@ namespace SZ3 {
             size_t nt = conf.dims[0];
             size_t n = conf.dims[1];
 
-            uchar fflag = 0x01;
+            T fflag = 1;
 
             if (nt >= 64 && n >= (1 << 16)) {
                 size_t fail = 0, total = 0;
@@ -1482,8 +1491,9 @@ namespace SZ3 {
                 if (fail == 0) {
                     size_t t = (nt - 1) / 2;
                     if (isSpatialWorse(conf, datax + t * n, datay + t * n, dataz + t * n)){
-                        fflag = 0x0a;
+                        fflag = 6;
                     }
+                    blockSizeCache.init();
                 }
             }
 
