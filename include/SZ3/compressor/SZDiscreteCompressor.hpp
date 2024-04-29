@@ -1158,7 +1158,7 @@ namespace SZ3 {
             Config conf1(n);
             conf1.absErrorBound = conf.absErrorBound / fflag;
             T fflag_stride = std::min(std::max((fflag - 1) / (nt / (T) 4), (T) 0), (T) 2);
-            printf("fflag stride = %.2f\n", fflag_stride);
+//            printf("fflag stride = %.2f\n", fflag_stride);
 
             size_t *p = new size_t[n];
 
