@@ -184,6 +184,10 @@ namespace SZ3 {
             index = 0;
         }
 
+        size_t numUnpred(){
+            return unpred.size();
+        }
+
 
         virtual void postcompress_data() {
         }

@@ -92,7 +92,7 @@ namespace SZ3 {
             void write(std::vector<size_t> vec) {
                 blockSize = vec;
                 flag = 0x01;
-                c = -1;
+                c = 64;
             }
 
             void write(size_t bx, size_t by, size_t bz) {
