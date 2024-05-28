@@ -23,6 +23,37 @@
 #define __soft_eb 0
 #define __batch_info 0
 
+#define __fix 1
+#define __huf 0
+
+//#define __blockcnt_encoding_method __huf
+
+//#define test_coding_methods 0
+
+#ifdef test_coding_methods
+
+#if test_coding_methods == 0
+#define __blockst_encoding_method __fix
+#define __repos_encoding_method __fix
+#endif
+
+#if test_coding_methods == 1
+#define __blockst_encoding_method __fix
+#define __repos_encoding_method __huf
+#endif
+
+#if test_coding_methods == 2
+#define __blockst_encoding_method __huf
+#define __repos_encoding_method __fix
+#endif
+
+#if test_coding_methods == 3
+#define __blockst_encoding_method __huf
+#define __repos_encoding_method __huf
+#endif
+
+#endif
+
 namespace SZ3 {
     template<class T, class Encoder, class Lossless>
     class SZDiscreteCompressor {
@@ -122,7 +153,7 @@ namespace SZ3 {
 
             _ = 0;
 
-            if (n <= (1llu << 12)) {
+            if (n <= (1llu << 20)) {
                 memcpy(samplex, datax, n * sizeof(T));
                 memcpy(sampley, datay, n * sizeof(T));
                 memcpy(samplez, dataz, n * sizeof(T));
@@ -764,23 +795,91 @@ namespace SZ3 {
                 blkst[i] -= blkst[i - 1];
             }
 
-            // use huffman encoder to compress the block bases
-            uchar *bytes_blkst = new uchar[std::max(blknum * 8, (size_t) 1024)], *tail_blkst = bytes_blkst;
-//            printf("+++flag = %.2lf\n",1.*nx*ny*nz/blknum);
-            encoder.preprocess_encode(blkst, blknum, 0, (1. * nx * ny * nz / blknum > 1e6 ? 1 : 0));
-            encoder.save(tail_blkst);
-            encoder.encode(blkst, blknum, tail_blkst);
+#if !__soft_eb
+            uchar *bytes_data = new uchar[std::max(conf.num * 16, (size_t) 1024) +
+                                          unx.size() * 3 * sizeof(T)], *tail_data = bytes_data;
+#endif
+
+#if __soft_eb
+            uchar *bytes_data = new uchar[std::max(conf.num*16, (size_t)1024)], *tail_data = bytes_data;
+#endif
+
+            SZ3::Config __conf = conf;
+            __conf.save(tail_data);
+            write(px, tail_data);
+            write(py, tail_data);
+            write(pz, tail_data);
+            write(bx, tail_data);
+            write(by, tail_data);
+            write(bz, tail_data);
+            write(nx, tail_data);
+            write(ny, tail_data);
+            write(nz, tail_data);
+            write(blknum, tail_data);
+
+            uchar *vtail_data = tail_data;
+
+#if __OUTPUT_INFO
+            uchar *ptail_data = tail_data;
+#endif
+
+            uchar *bytes_blkst = nullptr, *tail_blkst = nullptr;
+            size_t maxblkst = 0;
+            for(size_t i=0;i<blknum;i++) maxblkst = std::max(maxblkst, blkst[i]);
+#ifndef __blockst_encoding_method
+            if (maxblkst <= (1 << 30) || blknum <= (1 << 20) || (1. * nx * ny * nz / blknum) < 1e6) {
+#endif
+                bytes_blkst = new uchar[std::max(blknum * 8, (size_t) 1024)], tail_blkst = bytes_blkst;
+                encoder.preprocess_encode(blkst, blknum, 0, 0x00);
+                encoder.save(tail_blkst);
+                encoder.encode(blkst, blknum, tail_blkst);
+#ifndef __blockst_encoding_method
+            }
+#endif
+
+            vtail_data = tail_data;
+            encoder.preprocess_encode(blkst, blknum, 0, 0x01);
+            encoder.save(vtail_data);
+            encoder.encode(blkst, blknum, vtail_data);
+
+#ifdef  __blockst_encoding_method
+#if __blockst_encoding_method == __huf
+            write(bytes_blkst, tail_blkst - bytes_blkst, tail_data);
+#else
+            tail_data = vtail_data;
+#endif
+#else
+            if(bytes_blkst == nullptr) {
+                tail_data = vtail_data;
+            }
+            else{
+                size_t cmpSize0 = 0, cmpSize1 = 0;
+                delete[] lossless.compress(bytes_blkst, tail_blkst - bytes_blkst, cmpSize0);
+                delete[] lossless.compress(tail_data, vtail_data - tail_data, cmpSize1);
+//                printf("blkst %zu %zu\n", (size_t)(tail_blkst - bytes_blkst), (size_t)(vtail_data - tail_data));
+//                printf("blkst %zu %zu\n", cmpSize0, cmpSize1);
+                if (cmpSize0 < cmpSize1) {
+                    write(bytes_blkst, tail_blkst - bytes_blkst, tail_data);
+                }
+                else{
+                    tail_data = vtail_data;
+                }
+            }
+#endif
+
 
 #if __OUTPUT_INFO
 
-            printf("size of blkst = %.2lf MB, %zu bytes\n", 1. * (tail_blkst - bytes_blkst) / 1024 / 1024, tail_blkst - bytes_blkst);
+            printf("size of blkst = %.2lf MB, %zu bytes\n", 1. * (tail_data - ptail_data) / 1024 / 1024, tail_data - ptail_data);
             size_t cmpblkstSize;
-            delete[] lossless.compress(bytes_blkst, tail_blkst - bytes_blkst, cmpblkstSize);
+            delete[] lossless.compress(ptail_data, tail_data - ptail_data, cmpblkstSize);
             printf("size of compressed blkst = %.2lf MB, %zu bytes\n", 1. * cmpblkstSize / 1024 / 1024, cmpblkstSize);
+            ptail_data = tail_data;
 
 #endif
 
             delete[] blkst;
+            if(bytes_blkst != nullptr) delete[] bytes_blkst;
 
             // use huffman encoder to compress the number of points in each block
 
@@ -792,53 +891,138 @@ namespace SZ3 {
 //                printf("%zu\n", tem);
 //            }
 
-
             uchar *bytes_blkcnt = new uchar[std::max(blknum * 8, (size_t) 1024)], *tail_blkcnt = bytes_blkcnt;
             encoder.preprocess_encode(blkcnt, blknum, 0, 0xc0);
             encoder.save(tail_blkcnt);
             encoder.encode(blkcnt, blknum, tail_blkcnt);
 
+            vtail_data = tail_data;
+            encoder.preprocess_encode(blkcnt, blknum, 0, 0xc1);
+            encoder.save(vtail_data);
+            encoder.encode(blkcnt, blknum, vtail_data);
+
+#ifdef  __blockcnt_encoding_method
+#if __blockcnt_encoding_method == __huf
+            write(bytes_blkcnt, tail_blkcnt - bytes_blkcnt, tail_data);
+#else
+            tail_data = vtail_data;
+#endif
+#else
+            {
+                size_t cmpSize0 = 0, cmpSize1 = 0;
+                delete[] lossless.compress(bytes_blkcnt, tail_blkcnt - bytes_blkcnt, cmpSize0);
+                delete[] lossless.compress(tail_data, vtail_data - tail_data, cmpSize1);
+//                printf("%zu %zu\n", cmpSize0, cmpSize1);
+                if (cmpSize0 < cmpSize1) {
+                    write(bytes_blkcnt, tail_blkcnt - bytes_blkcnt, tail_data);
+                } else {
+                    tail_data = vtail_data;
+                }
+            }
+#endif
+
+
 #if __OUTPUT_INFO
 
-            printf("size of blkcnt = %.2lf MB, %zu bytes\n", 1. * (tail_blkcnt - bytes_blkcnt) / 1024 / 1024, tail_blkcnt - bytes_blkcnt);
+            printf("size of blkcnt = %.2lf MB, %zu bytes\n", 1. * (tail_data - ptail_data) / 1024 / 1024, tail_data - ptail_data);
             size_t cmpblkcntSize;
-            delete[] lossless.compress(bytes_blkcnt, tail_blkcnt - bytes_blkcnt, cmpblkcntSize);
+            delete[] lossless.compress(ptail_data, tail_data - ptail_data, cmpblkcntSize);
             printf("size of compressed blkcnt = %.2lf MB, %zu bytes\n", 1. * cmpblkcntSize / 1024 / 1024, cmpblkcntSize);
+            ptail_data = tail_data;
 
 #endif
 
             delete[] blkcnt;
-
-//            for(size_t i=0;i<conf.num;i++){
-//                printf("%zu", quads[i]);
-//            }
-//            printf("\n");
+            delete[] bytes_blkcnt;
 
             uchar *bytes_quads = new uchar[std::max((size_t) ceil(conf.num * 0.4),
                                                     (size_t) 1024)], *tail_quads = bytes_quads;
-            encoder.preprocess_encode(quads, conf.num, 8, 0xc1);
+            encoder.preprocess_encode(quads, conf.num, 8, 0xc0);
             encoder.save(tail_quads);
             encoder.encode(quads, conf.num, tail_quads);
 
+            vtail_data = tail_data;
+            encoder.preprocess_encode(quads, conf.num, 8, 0xc1);
+            encoder.save(vtail_data);
+            encoder.encode(quads, conf.num, vtail_data);
+
+#ifdef  __repos_encoding_method
+#if __repos_encoding_method == __huf
+            write(bytes_quads, tail_quads - bytes_quads, tail_data);
+#else
+            tail_data = vtail_data;
+#endif
+#else
+            {
+                size_t cmpSize0 = 0, cmpSize1 = 0;
+                delete[] lossless.compress(bytes_quads, tail_quads - bytes_quads, cmpSize0);
+                delete[] lossless.compress(tail_data, vtail_data - tail_data, cmpSize1);
+//                printf("quads %zu %zu\n", (size_t) (tail_quads - bytes_quads), (size_t) (vtail_data - tail_data));
+//                printf("quads %zu %zu\n", cmpSize0, cmpSize1);
+                if (cmpSize0 < cmpSize1) {
+                    write(bytes_quads, tail_quads - bytes_quads, tail_data);
+                } else {
+                    tail_data = vtail_data;
+                }
+            }
+#endif
+
 #if __OUTPUT_INFO
 
-            //            printf("size of quads = %.2lf MB, %zu bytes\n", 1. * (tail_quads - bytes_quads) / 1024 / 1024, tail_quads - bytes_quads);
-                        size_t cmpQuadsSize;
-                        delete[] lossless.compress(bytes_quads, tail_quads - bytes_quads, cmpQuadsSize);
-            //            printf("size of compressed blkcnt = %.2lf MB, %zu bytes\n", 1. * cmpQuadsSize / 1024 / 1024, cmpQuadsSize);
+//                        printf("size of quads = %.2lf MB, %zu bytes\n", 1. * (tail_quads - bytes_quads) / 1024 / 1024, tail_quads - bytes_quads);
+//                        size_t cmpQuadsSize;
+//                        delete[] lossless.compress(bytes_quads, tail_quads - bytes_quads, cmpQuadsSize);
+//                        printf("size of compressed blkcnt = %.2lf MB, %zu bytes\n", 1. * cmpQuadsSize / 1024 / 1024, cmpQuadsSize);
 
 #endif
 
             delete[] quads;
+            delete[] bytes_quads;
 
             // use huffman encoder to encode the relative error of each point
 
-            uchar *bytes_repos = new uchar[std::max(
-                    conf.num * std::max((size_t) 4, (size_t) ceil(log2(1. * bx * by * bz))),
-                    (size_t) 1024)], *tail_repos = bytes_repos;
-            encoder.preprocess_encode(repos, conf.num, 0, 0xc1);
-            encoder.save(tail_repos);
-            encoder.encode(repos, conf.num, tail_repos);
+            uchar *bytes_repos = nullptr, *tail_repos = nullptr;
+#ifndef __repos_encoding_method
+            if (bx * by * bz <= (1llu << 48)) {
+#endif
+                bytes_repos = new uchar[std::max(
+                        conf.num * std::max((size_t) 4, (size_t) ceil(log2(1. * bx * by * bz))),
+                        (size_t) 1024)], tail_repos = bytes_repos;
+                encoder.preprocess_encode(repos, conf.num, 0, 0x00);
+                encoder.save(tail_repos);
+                encoder.encode(repos, conf.num, tail_repos);
+#ifndef __repos_encoding_method
+            }
+#endif
+
+            vtail_data = tail_data;
+            encoder.preprocess_encode(repos, conf.num, bx * by * bz, 0xc1);
+            encoder.save(vtail_data);
+            encoder.encode(repos, conf.num, vtail_data);
+
+#ifdef  __repos_encoding_method
+#if __repos_encoding_method == __huf
+            write(bytes_repos, tail_repos - bytes_repos, tail_data);
+#else
+            tail_data = vtail_data;
+#endif
+#else
+            if(bytes_repos == nullptr){
+                tail_data = vtail_data;
+            }
+            else {
+                size_t cmpSize0 = 0, cmpSize1 = 0;
+                delete[] lossless.compress(bytes_repos, tail_repos - bytes_repos, cmpSize0);
+                delete[] lossless.compress(tail_data, vtail_data - tail_data, cmpSize1);
+//                printf("repos %zu %zu\n", (size_t) (tail_repos - bytes_repos), (size_t) (vtail_data - tail_data));
+//                printf("repos %zu %zu\n", cmpSize0, cmpSize1);
+                if (cmpSize0 < cmpSize1) {
+                    write(bytes_repos, tail_repos - bytes_repos, tail_data);
+                } else {
+                    tail_data = vtail_data;
+                }
+            }
+#endif
 
 //            uchar *bytes_repos = new uchar[std::max(conf.num * std::max((size_t)16, (size_t)ceil(log2(1. * bx * by * bz))), (size_t)1024)], *tail_repos = bytes_repos;
 ////            for(size_t i=0;i<conf.num;i++) printf("%zu", reposx[i]);
@@ -871,59 +1055,25 @@ namespace SZ3 {
 //            delete[] poslist;
 
 #if __OUTPUT_INFO
-
-            printf("size of repos = %.2lf MB, %zu bytes\n", 1. * (tail_repos - bytes_repos + (tail_quads - bytes_quads)) / 1024 / 1024, tail_repos - bytes_repos + (tail_quads - bytes_quads));
+            printf("size of repos = %.2lf MB, %zu bytes\n", 1. * (tail_data - ptail_data) / 1024 / 1024, tail_data - ptail_data);
             size_t cmpreposSize;
-            delete[] lossless.compress(bytes_repos, tail_repos - bytes_repos, cmpreposSize);
-            printf("size of compressed repos = %.2lf MB, %zu bytes\n", 1. * (cmpreposSize + cmpQuadsSize) / 1024 / 1024, cmpreposSize + cmpQuadsSize);
-
+            delete[] lossless.compress(ptail_data, tail_data - ptail_data, cmpreposSize);
+            printf("size of compressed repos = %.2lf MB, %zu bytes\n", 1. * cmpreposSize / 1024 / 1024, cmpreposSize);
+            ptail_data = tail_data;
 #endif
 
-//            writefile("/Users/longtaozhang/compress/repos_file/hacc-33554432-eb=1e-3-combine.dat", repos, conf.num);
-//            writefile("/Users/longtaozhang/compress/repos_file/hacc-33554432-eb=1e-3-separate.dat", reposs, 3 * conf.num);
+//            char buffer[1024];
+//            sprintf(buffer, "/Users/longtaozhang/compress/repos/hacc-33554432-eb=%.0e-blksz=%zux%zux%zu.txt", conf.absErrorBound, bx, by, bz);
+//            writeTextFile(buffer, repos, conf.num);
 
             delete[] repos;
+            if(bytes_repos != nullptr) delete[] bytes_repos;
 
 #if __OUTPUT_INFO
 
             printf("begin merge\n");
 
 #endif
-
-#if !__soft_eb
-            uchar *bytes_data = new uchar[std::max(conf.num * 16, (size_t) 1024) +
-                                          unx.size() * 3 * sizeof(T)], *tail_data = bytes_data;
-#endif
-
-#if __soft_eb
-            uchar *bytes_data = new uchar[std::max(conf.num*16, (size_t)1024)], *tail_data = bytes_data;
-#endif
-
-            // write the basic info
-
-            SZ3::Config __conf = conf;
-            __conf.save(tail_data);
-            write(px, tail_data);
-            write(py, tail_data);
-            write(pz, tail_data);
-            write(bx, tail_data);
-            write(by, tail_data);
-            write(bz, tail_data);
-            write(nx, tail_data);
-            write(ny, tail_data);
-            write(nz, tail_data);
-            write(blknum, tail_data);
-
-            // write the codes of the above 3 arrays
-
-            write(bytes_blkst, tail_blkst - bytes_blkst, tail_data);
-            delete[] bytes_blkst;
-            write(bytes_blkcnt, tail_blkcnt - bytes_blkcnt, tail_data);
-            delete[] bytes_blkcnt;
-            write(bytes_quads, tail_quads - bytes_quads, tail_data);
-            delete[] bytes_quads;
-            write(bytes_repos, tail_repos - bytes_repos, tail_data);
-            delete[] bytes_repos;
 
 #if __OUTPUT_INFO
 
@@ -937,6 +1087,12 @@ namespace SZ3 {
             write(unx.data(), unx.size(), tail_data);
             write(uny.data(), uny.size(), tail_data);
             write(unz.data(), unz.size(), tail_data);
+//            unx.clear();
+//            unx.shrink_to_fit();
+//            uny.clear();
+//            uny.shrink_to_fit();
+//            unz.clear();
+//            unz.shrink_to_fit();
 #endif
 
             uchar *lossless_data = lossless.compress(bytes_data, tail_data - bytes_data, compressed_size);
