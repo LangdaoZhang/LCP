@@ -96,6 +96,43 @@ namespace SZ3 {
             return std::max(std::max(x, y), z);
         }
 
+//        template<class Type>
+//        class StaticArrayManager {
+//        public:
+//            StaticArrayManager() {
+//                mp = std::map<size_t, Type *>();
+//
+//            }
+//
+//            Type *getArray(size_t n) {
+//                if (mp.find(n) == mp.end()) {
+//                    mp[n] = new Type[n];
+//                }
+//                return mp[n];
+//            }
+//
+//            void clear() {
+//                for (const auto [key, value]: mp) {
+//                    delete[] value;
+//                }
+//                mp.clear();
+//            }
+//
+//            void erase(size_t n) {
+//                if (mp.find(n) != mp.end()) {
+//                    delete[] mp[n];
+//                    mp.erase(n);
+//                }
+//            }
+//
+//        private:
+//            std::map<size_t, Type *> mp;
+//        };
+//
+//        StaticArrayManager<T> staticArrayManagerT;
+//        StaticArrayManager<size_t> staticArrayManageru64;
+//        StaticArrayManager<uchar> staticArrayManageru8;
+
         class BlockSizeCache {
         public:
 
@@ -437,6 +474,42 @@ namespace SZ3 {
             return {0, 0, 0};
 
         }
+
+//        void preQuantize(const Config &conf, T &px, T *datax, size_t *qx, std::vector<T> &unquant) {
+//
+//            px = datax[0];
+//            for (size_t i = 1; i < conf.num; i++) {
+//                px = std::min(px, datax[i]);
+//            }
+//
+//            for (size_t i = 0; i < conf.num; i++) {
+//                qx[i] = (size_t) ((datax[i] - px) / conf.absErrorBound) / 2;
+//                T decx = (qx[i] << 1 | 1) * conf.absErrorBound + px;
+//                if (fabs(decx - datax[i]) > conf.absErrorBound) {
+//                    qx[i] = -1;
+//                    unquant.push_back(datax[i]);
+//                }
+//            }
+//        }
+//
+//        void preQuantizeByOrder(const Config &conf, T &px, T *datax, size_t *qx, std::vector<T> &unquant, size_t *ord) {
+//            if(ord == nullptr) {
+//                preQuantize(conf, px, datax, qx, unquant);
+//                return;
+//            }
+//            px = datax[0];
+//            for (size_t i = 1; i < conf.num; i++) {
+//                px = std::min(px, datax[i]);
+//            }
+//            for (size_t i = 0; i < conf.num; i++) {
+//                qx[i] = (size_t) ((datax[ord[i]] - px) / conf.absErrorBound) / 2;
+//                T decx = (qx[i] << 1 | 1) * conf.absErrorBound + px;
+//                if (fabs(decx - datax[ord[i]]) > conf.absErrorBound) {
+//                    qx[i] = -1;
+//                    unquant.push_back(datax[ord[i]]);
+//                }
+//            }
+//        }
 
         /*
          * To compress the data from datax, datay and dataz using configure conf
@@ -825,7 +898,7 @@ namespace SZ3 {
 
             uchar *bytes_blkst = nullptr, *tail_blkst = nullptr;
             size_t maxblkst = 0;
-            for(size_t i=0;i<blknum;i++) maxblkst = std::max(maxblkst, blkst[i]);
+            for (size_t i = 0; i < blknum; i++) maxblkst = std::max(maxblkst, blkst[i]);
 #ifndef __blockst_encoding_method
             if (maxblkst <= (1 << 30) || blknum <= (1 << 20) || (1. * nx * ny * nz / blknum) < 1e6) {
 #endif
@@ -849,10 +922,9 @@ namespace SZ3 {
             tail_data = vtail_data;
 #endif
 #else
-            if(bytes_blkst == nullptr) {
+            if (bytes_blkst == nullptr) {
                 tail_data = vtail_data;
-            }
-            else{
+            } else {
                 size_t cmpSize0 = 0, cmpSize1 = 0;
                 delete[] lossless.compress(bytes_blkst, tail_blkst - bytes_blkst, cmpSize0);
                 delete[] lossless.compress(tail_data, vtail_data - tail_data, cmpSize1);
@@ -860,8 +932,7 @@ namespace SZ3 {
 //                printf("blkst %zu %zu\n", cmpSize0, cmpSize1);
                 if (cmpSize0 < cmpSize1) {
                     write(bytes_blkst, tail_blkst - bytes_blkst, tail_data);
-                }
-                else{
+                } else {
                     tail_data = vtail_data;
                 }
             }
@@ -879,7 +950,7 @@ namespace SZ3 {
 #endif
 
             delete[] blkst;
-            if(bytes_blkst != nullptr) delete[] bytes_blkst;
+            if (bytes_blkst != nullptr) delete[] bytes_blkst;
 
             // use huffman encoder to compress the number of points in each block
 
@@ -969,10 +1040,10 @@ namespace SZ3 {
 
 #if __OUTPUT_INFO
 
-//                        printf("size of quads = %.2lf MB, %zu bytes\n", 1. * (tail_quads - bytes_quads) / 1024 / 1024, tail_quads - bytes_quads);
-//                        size_t cmpQuadsSize;
-//                        delete[] lossless.compress(bytes_quads, tail_quads - bytes_quads, cmpQuadsSize);
-//                        printf("size of compressed blkcnt = %.2lf MB, %zu bytes\n", 1. * cmpQuadsSize / 1024 / 1024, cmpQuadsSize);
+//            printf("size of quads = %.2lf MB, %zu bytes\n", 1. * (tail_quads - bytes_quads) / 1024 / 1024, tail_quads - bytes_quads);
+//            size_t cmpQuadsSize;
+//            delete[] lossless.compress(bytes_quads, tail_quads - bytes_quads, cmpQuadsSize);
+//            printf("size of compressed blkcnt = %.2lf MB, %zu bytes\n", 1. * cmpQuadsSize / 1024 / 1024, cmpQuadsSize);
 
 #endif
 
@@ -1007,10 +1078,9 @@ namespace SZ3 {
             tail_data = vtail_data;
 #endif
 #else
-            if(bytes_repos == nullptr){
+            if (bytes_repos == nullptr) {
                 tail_data = vtail_data;
-            }
-            else {
+            } else {
                 size_t cmpSize0 = 0, cmpSize1 = 0;
                 delete[] lossless.compress(bytes_repos, tail_repos - bytes_repos, cmpSize0);
                 delete[] lossless.compress(tail_data, vtail_data - tail_data, cmpSize1);
@@ -1067,7 +1137,7 @@ namespace SZ3 {
 //            writeTextFile(buffer, repos, conf.num);
 
             delete[] repos;
-            if(bytes_repos != nullptr) delete[] bytes_repos;
+            if (bytes_repos != nullptr) delete[] bytes_repos;
 
 #if __OUTPUT_INFO
 
@@ -1289,6 +1359,305 @@ namespace SZ3 {
             return res;
         }
 
+//        static const size_t temporalRadius = 32768;
+//        static const size_t temporalDiameter = temporalRadius << 1;
+//
+//        void getPredictionIntegers(const size_t n, const size_t *nowx, const size_t *nowy, const size_t *nowz,
+//                                        const size_t *prex, const size_t *prey, const size_t *prez, size_t *errx,
+//                                        size_t *erry, size_t *errz) {
+//
+//            auto work = [&](const size_t *now, const size_t *pre, size_t *err) {
+//                for (size_t i = 0; i < n; i++) {
+//                    err[i] = now[i] - pre[i] + temporalRadius;
+//                    if (err[i] >= temporalDiameter) {
+//                        err[i] = 0;
+//                    }
+//                }
+//            };
+//            work(nowx, prex, errx);
+//            work(nowy, prey, erry);
+//            work(nowz, prez, errz);
+//        }
+//
+//
+//        void getPredictionIntegers(const size_t n, const size_t *nowx, const size_t *nowy, const size_t *nowz,
+//                                   const size_t *prex, const size_t *prey, const size_t *prez, size_t *errx,
+//                                   size_t *erry, size_t *errz, std::vector<size_t> &unpred) {
+//
+//            auto work = [&](const size_t *now, const size_t *pre, size_t *err) {
+//                for (size_t i = 0; i < n; i++) {
+//                    err[i] = now[i] - pre[i] + temporalRadius;
+//                    if (err[i] >= temporalDiameter) {
+//                        err[i] = 0;
+//                    }
+//                    if (err[i] == 0) {
+//                        unpred.push_back(now[i]);
+//                    }
+//                }
+//            };
+//            work(nowx, prex, errx);
+//            work(nowy, prey, erry);
+//            work(nowz, prez, errz);
+////            for(size_t i=0;i<n;i++){
+////                printf("[%d]", (int) erry[i] - temporalRadius);
+////            }
+////            printf("\n");
+//        }
+//
+//        void getPredictionBytes(const size_t n, const size_t *nowx, const size_t *nowy, const size_t *nowz,
+//                                const size_t *prex, const size_t *prey, const size_t *prez, uchar *&bytes) {
+//
+//            size_t *err = staticArrayManageru64.getArray(n * 3);
+//            size_t *errx = err, *erry = errx + n, *errz = erry + n;
+//
+//            std::vector<size_t> unpred;
+//            getPredictionIntegers(n, nowx, nowy, nowz, prex, prey, prez, errx, erry, errz, unpred);
+//
+////            for(size_t i=0;i<n;i++){
+////                printf("[%d]", (int)errx[i] - temporalRadius);
+////            }
+//
+//            write(unpred.size(), bytes);
+//            write(unpred.data(), unpred.size(), bytes);
+//
+//            encoder.preprocess_encode(err, n * 3, temporalDiameter);
+//            encoder.save(bytes);
+//            encoder.encode(err, n * 3, bytes);
+//        }
+//
+//        uchar isTPIntegers(const Config &conf, const size_t *nowx, const size_t *nowy, const size_t *nowz,
+//                           const size_t *prex, const size_t *prey, const size_t *prez, size_t cmpSize, uchar newBatchFlag) {
+//
+//            if (prex == nullptr || prey == nullptr || prez == nullptr) {
+//                return false;
+//            }
+//
+//            const size_t &n = conf.dims[1];
+//            size_t fail = 0, total = n * 3;
+//
+//            uchar *bytes = staticArrayManageru8.getArray(n * 24), *tail = bytes;
+//            getPredictionBytes(n, nowx, nowy, nowz, prex, prey, prez, tail);
+//
+//            uchar res = tail - bytes < cmpSize ? 0x01 : 0x00;
+//            return res;
+//        }
+//
+//        uchar *compressTemporalPredictionOnSliceIntegers(const Config &conf, T *datax, T *datay, T *dataz,
+//                                                            size_t &compressed_size, size_t *ord, uchar blkflag,
+//                                                            size_t bx, size_t by, size_t bz, uchar *&bytes1,
+//                                                            size_t &compressed_size1, size_t *ord1) {
+//
+//            size_t nt = conf.dims[0];
+//            size_t n = conf.dims[1];
+//
+////            uchar *bytes = new uchar[std::max(conf.num * 16, (size_t) 65536)], *tailp = bytes, *tail = bytes + nt;
+//            uchar *bytes = staticArrayManageru8.getArray(std::max(conf.num * 16, (size_t) 65536)), *tailp = bytes, *tail = bytes + nt;
+//
+//            Config conf1(n);
+//            conf1.absErrorBound = conf.absErrorBound;
+//
+//            size_t *p = new size_t[n];
+//
+//            size_t *pdx = new size_t[nt * n];
+//            size_t *pdy = new size_t[nt * n];
+//            size_t *pdz = new size_t[nt * n];
+//
+//            size_t *errx = new size_t [nt * n];
+//            size_t *erry = new size_t [nt * n];
+//            size_t *errz = new size_t [nt * n];
+//            size_t errlen = 0;
+//
+//            size_t *decmpdata = new size_t [n * 3];
+//            size_t *d1x = decmpdata, *d1y = d1x + n, *d1z = d1y + n;
+//            T px[nt], py[nt], pz[nt];
+//
+//            size_t outSize = 0;
+//
+//            std::vector<size_t> unpred;
+//            std::vector<T> unquant;
+//
+//            if (bytes1 == nullptr){
+//
+//#if __batch_info
+//                printf("\e[34m\e[1mnew batch, t = %zu\n\e[0m", (size_t) 0);
+//#endif
+//
+//                writeBytesByte(tailp, 0x00);
+//
+//                bytes1 = compressSimpleBlocking(conf1, datax, datay, dataz, compressed_size1, p, blkflag, bx, by, bz);
+//                if (ord != nullptr) {
+//                    memcpy(ord, p, n * sizeof(size_t));
+//                }
+//                memcpy(ord1, p, n * sizeof(size_t));
+//                const uchar *bytes1c = bytes1;
+//                decompressSimpleBlockingIntegers(bytes1c, px[0], py[0], pz[0], d1x, d1y, d1z, outSize, compressed_size1);
+//
+//                printf("compressed_size1 = %zu\n", compressed_size1);
+//
+//                memcpy(pdx, d1x, n * sizeof(size_t));
+//                memcpy(pdy, d1y, n * sizeof(size_t));
+//                memcpy(pdz, d1z, n * sizeof(size_t));
+//            }
+//            else {
+//                const uchar *bytes1c = bytes1;
+//                decompressSimpleBlockingIntegers(bytes1c, px[0], py[0], pz[0], d1x, d1y, d1z, outSize, compressed_size1);
+//
+//                std::vector<T> unquant_;
+//                preQuantizeByOrder(conf1, px[0], datax, pdx, unquant_, ord1);
+//                preQuantizeByOrder(conf1, py[0], datay, pdy, unquant_, ord1);
+//                preQuantizeByOrder(conf1, pz[0], dataz, pdz, unquant_, ord1);
+//
+//                if (isTPIntegers(conf, pdx, pdy, pdz, d1x, d1y, d1z, compressed_size1, 0x01)) {
+//#if __batch_info
+//                    printf("\e[32m\e[1mold batch, t = %zu\n\e[0m", 0);
+//#endif
+//
+//                    writeBytesByte(tailp, 0x01);
+//
+//                    for(size_t it:unquant_){
+//                        unquant.push_back(it);
+//                    }
+//
+//                    getPredictionIntegers(n, pdx, pdy, pdz, d1x, d1y, d1z, errx, erry, errz, unpred);
+//                    errlen = n;
+//
+//                    if (ord != nullptr) {
+//                        memcpy(ord, ord1, n * sizeof(size_t));
+//                    }
+//                    memcpy(p, ord1, n * sizeof(size_t));
+//                } else {
+//#if __batch_info
+//                    printf("\e[34m\e[1mnew batch, t = %zu\n\e[0m", 0);
+//#endif
+//
+//                    writeBytesByte(tailp, 0x00);
+//
+//                    bytes1 = compressSimpleBlocking(conf1, datax, datay, dataz, compressed_size1, p, blkflag, bx, by,
+//                                                    bz);
+//                    if (ord != nullptr) {
+//                        memcpy(ord, p, n * sizeof(size_t));
+//                    }
+//                    memcpy(ord1, p, n * sizeof(size_t));
+//                    const uchar *bytes1c = bytes1;
+//                    decompressSimpleBlockingIntegers(bytes1c, px[0], py[0], pz[0], pdx, pdy, pdz, outSize, compressed_size1);
+//
+//                    printf("compressed_size1 = %zu\n", compressed_size1);
+//                }
+//            }
+//
+//            compressed_size = compressed_size1;
+//
+//            for (size_t t = 1; t < nt; t++) {
+//
+//                printf("t = %zu\n", t);
+//
+//                size_t *nowpx = pdx + t * n;
+//                size_t *nowpy = pdy + t * n;
+//                size_t *nowpz = pdz + t * n;
+//                size_t *prepx = nowpx - n;
+//                size_t *prepy = nowpy - n;
+//                size_t *prepz = nowpz - n;
+//
+//                std::vector<T> unquant_;
+//
+//                preQuantizeByOrder(conf1, px[t], datax + t * n, nowpx, unquant_, p);
+//                preQuantizeByOrder(conf1, py[t], datay + t * n, nowpy, unquant_, p);
+//                preQuantizeByOrder(conf1, pz[t], dataz + t * n, nowpz, unquant_, p);
+//
+//                if (isTPIntegers(conf, nowpx, nowpy, nowpz, prepx, prepy, prepz, compressed_size,
+//                         t == 1 ? 0x01 : 0x00)) {
+//#if __batch_info
+//                    printf("\e[32m\e[1mold batch, t = %zu\n\e[0m", t);
+//#endif
+//
+//                    writeBytesByte(tailp, 0x01);
+//
+//                    for(size_t it:unquant_){
+//                        unquant.push_back(it);
+//                    }
+//
+//                    size_t *errpx = errx + errlen;
+//                    size_t *errpy = erry + errlen;
+//                    size_t *errpz = errz + errlen;
+//
+//                    getPredictionIntegers(n, nowpx, nowpy, nowpz, prepx, prepy, prepz, errpx, errpy, errpz, unpred);
+//
+////                    for(int i=0;i<n;i++){
+////                        printf("(%d)", (int) errpy[i] - temporalRadius);
+////                    }
+////                    printf("\n");
+//
+//                    errlen += n;
+//                } else {
+//#if __batch_info
+//                    printf("\e[34m\e[1mnew batch, t = %zu\n\e[0m", t);
+//#endif
+//
+//                    writeBytesByte(tailp, 0x00);
+//
+//                    const uchar *bytes1 = compressSimpleBlocking(conf1, datax + t * n, datay + t * n, dataz + t * n,
+//                                                                 compressed_size, p, blkflag, bx, by, bz);
+//                    write(compressed_size, tail);
+//                    write(bytes1, compressed_size, tail);
+//
+//                    decompressSimpleBlockingIntegers(bytes1, px[0], py[0], pz[0], d1x, d1y, d1z, outSize, compressed_size);
+//                    delete[] bytes1;
+//
+//                    if (t + 1 < nt) {
+//                        memcpy(pdx + t * n, d1x, n * sizeof(T));
+//                        memcpy(pdy + t * n, d1y, n * sizeof(T));
+//                        memcpy(pdz + t * n, d1z, n * sizeof(T));
+//                    }
+//                }
+//
+//                if (ord != nullptr) {
+//                    for (size_t i = 0; i < n; i++) {
+//                        ord[t * n + i] = t * n + p[i];
+//                    }
+//                }
+//            }
+//
+//            write(unquant, tail);
+//            write(unpred, tail);
+//
+////            printf("unquant.size() = %zu\n", unquant.size());
+////            printf("unpred.size() = %zu\n", unpred.size());
+//
+//            size_t *err = staticArrayManageru64.getArray(nt * n * 3);
+//            memcpy(err, errx, errlen * sizeof(size_t));
+//            memcpy(err + errlen, erry, errlen * sizeof(size_t));
+//            memcpy(err + errlen + errlen, errz, errlen * sizeof(size_t));
+//            encoder.preprocess_encode(err, errlen * 3, temporalDiameter);
+//            encoder.save(tail);
+//            encoder.encode(err, errlen * 3, tail);
+//
+////            encoder.preprocess_encode(errx, errlen, 0);
+////            encoder.save(tail);
+////            encoder.encode(errx, errlen, tail);
+////
+//////            encoder.preprocess_encode(erry, errlen, 0);
+//////            encoder.save(tail);
+//////            encoder.encode(erry, errlen, tail);
+//////
+//////            encoder.preprocess_encode(errz, errlen, 0);
+//////            encoder.save(tail);
+//////            encoder.encode(errz, errlen, tail);
+//
+//            delete[] p;
+//            delete[] pdx;
+//            delete[] errx;
+//            delete[] pdy;
+//            delete[] erry;
+//            delete[] pdz;
+//            delete[] errz;
+//
+//            uchar *lossless_data = lossless.compress(bytes, tail - bytes, compressed_size);
+//            printf("compressed size = %zu -> %zu\n", tail - bytes, compressed_size);
+////            delete[] bytes;
+//
+//            return lossless_data;
+//        }
+
         /*
         * To compress the data from datax, datay and dataz using configure conf and buffer size bt
         * Store the result in the return pointer, and store the size compressed data in compressed_data
@@ -1296,11 +1665,11 @@ namespace SZ3 {
         * after decompress, datax, datay, dataz will not increase
         */
 
-        uchar *compressSimpleBlockingWithTemporalPredictionOnSlice(const Config &conf, T *datax, T *datay, T *dataz,
-                                                                   size_t &compressed_size, size_t *ord, uchar blkflag,
-                                                                   size_t bx, size_t by, size_t bz, uchar *&bytes1,
-                                                                   size_t &compressed_size1, size_t *ord1,
-                                                                   T fflag) {
+        uchar *compressTemporalPredictionOnSlice(const Config &conf, T *datax, T *datay, T *dataz,
+                                                 size_t &compressed_size, size_t *ord, uchar blkflag,
+                                                 size_t bx, size_t by, size_t bz, uchar *&bytes1,
+                                                 size_t &compressed_size1, size_t *ord1,
+                                                 T fflag) {
 
             static const int64_t radius = (1 << 15);
 
@@ -1313,7 +1682,7 @@ namespace SZ3 {
 
             Config conf1(n);
             conf1.absErrorBound = conf.absErrorBound / fflag;
-            T fflag_stride = std::min(std::max((fflag - 1) / (nt / (T) 4), (T) 0), (T) 2);
+            T fflag_stride = std::max((fflag - 1) / (nt / (T) 4), fflag - 1);
 //            printf("fflag stride = %.2f\n", fflag_stride);
 
             size_t *p = new size_t[n];
@@ -1335,10 +1704,10 @@ namespace SZ3 {
 //            delete[] bytes1;
 
             T *pdx = new T[nt * n];
-            size_t *errx = new size_t[nt * n];
             T *pdy = new T[nt * n];
-            size_t *erry = new size_t[nt * n];
             T *pdz = new T[nt * n];
+            size_t *errx = new size_t[nt * n];
+            size_t *erry = new size_t[nt * n];
             size_t *errz = new size_t[nt * n];
             size_t errlen = 0;
 
@@ -1405,9 +1774,9 @@ namespace SZ3 {
                     memcpy(p, ord1, n * sizeof(size_t));
                 } else {
 
-                    if(fflag > 1){
+                    if (fflag > 1) {
                         fflag -= fflag_stride;
-                        if(fflag < 1) fflag = 1;
+                        if (fflag < 1) fflag = 1;
                         conf1.absErrorBound = conf.absErrorBound / fflag;
                     }
 
@@ -1494,10 +1863,10 @@ namespace SZ3 {
                     errlen += n;
                 } else {
 
-                    if(fflag > 1){
+                    if (fflag > 1) {
                         fflag -= fflag_stride;
-                        if(fflag < 1) fflag = 1;
-                        if(nt - t <= 2) fflag = 1;
+                        if (fflag < 1) fflag = 1;
+                        if (nt - t <= 2) fflag = 1;
                         conf1.absErrorBound = conf.absErrorBound / fflag;
                     }
 
@@ -1568,9 +1937,9 @@ namespace SZ3 {
             return lossless_data;
         }
 
-        uchar isSpatialWorse(const Config conf, T *datax, T *datay, T *dataz){
+        uchar isSpatialWorse(const Config conf, T *datax, T *datay, T *dataz) {
 
-            const size_t& n = conf.dims[1];
+            const size_t &n = conf.dims[1];
             LinearQuantizer<T> quantizer(conf.absErrorBound, (1 << 15));
 
             size_t *err = new size_t[3 * n], *errx = err, *erry = errx + n, *errz = erry + n;
@@ -1629,7 +1998,7 @@ namespace SZ3 {
 
             T fflag = 1;
 
-            if (nt >= 64 && n >= (1 << 16)) {
+            if (nt >= 64) {
                 size_t fail = 0, total = 0;
                 T radius = (1 << 16) * conf.absErrorBound;
                 for (size_t i = 0; i < n; i += n / 100) {
@@ -1646,8 +2015,8 @@ namespace SZ3 {
                 }
                 if (fail == 0) {
                     size_t t = (nt - 1) / 2;
-                    if (isSpatialWorse(conf, datax + t * n, datay + t * n, dataz + t * n)){
-                        fflag = 6;
+                    if (isSpatialWorse(conf, datax + t * n, datay + t * n, dataz + t * n)) {
+                        fflag = 6.4;
                     }
                     blockSizeCache.init();
                 }
@@ -1672,6 +2041,38 @@ namespace SZ3 {
             size_t *ord1 = new size_t[n];
             int cnt1 = -1;
 
+            if (fflag > 1){
+                double l = 1, r = 9, midl, midr;
+                size_t size_midl, size_midr;
+                while(r - l > 0.5){
+                    midl = (l + l + r) / 3.;
+                    midr = (l + r + r) / 3.;
+
+                    compressTemporalPredictionOnSlice(confSlice, datax, datay, dataz, size_midl, nullptr,
+                                                      blkflag, bx, by, bz, bytes1, compressed_size1, ord1, midl);
+                    delete[] bytes1;
+                    bytes1 = nullptr;
+                    compressed_size1 = 0;
+                    size_midl += compressed_size1;
+
+                    compressTemporalPredictionOnSlice(confSlice, datax, datay, dataz, size_midr, nullptr,
+                                                      blkflag, bx, by, bz, bytes1, compressed_size1, ord1, midr);
+                    delete[] bytes1;
+                    bytes1 = nullptr;
+                    compressed_size1 = 0;
+                    size_midr += compressed_size1;
+
+                    if (size_midl < size_midr){
+                        r = midr;
+                    }
+                    else{
+                        l = midl;
+                    }
+                }
+                fflag = (l + r) / 2;
+                printf("fflag = %.6lf\n", fflag);
+            }
+
             for (size_t l = 0; l < nt; l += bt) {
 
                 size_t r = l + bt;
@@ -1685,14 +2086,23 @@ namespace SZ3 {
 
                 if (nt - l < 64) fflag = 0x01;
 
-                uchar *sliceBytes = compressSimpleBlockingWithTemporalPredictionOnSlice(confSlice, datax + l * n,
-                                                                                        datay + l * n, dataz + l * n,
-                                                                                        slice_compressed_size,
-                                                                                        ord == nullptr ? nullptr : ord +
-                                                                                                                   l *
-                                                                                                                   n,
-                                                                                        blkflag, bx, by, bz, bytes1,
-                                                                                        compressed_size1, ord1, fflag);
+                uchar *sliceBytes = compressTemporalPredictionOnSlice(confSlice, datax + l * n,
+                                                                      datay + l * n, dataz + l * n,
+                                                                      slice_compressed_size,
+                                                                      ord == nullptr ? nullptr : ord +
+                                                                                                 l *
+                                                                                                 n,
+                                                                      blkflag, bx, by, bz, bytes1,
+                                                                      compressed_size1, ord1, fflag);
+
+//                uchar *sliceBytes = compressTemporalPredictionOnSliceIntegers(confSlice, datax + l * n,
+//                                                                      datay + l * n, dataz + l * n,
+//                                                                      slice_compressed_size,
+//                                                                      ord == nullptr ? nullptr : ord +
+//                                                                                                 l *
+//                                                                                                 n,
+//                                                                      blkflag, bx, by, bz, bytes1,
+//                                                                      compressed_size1, ord1);
 
                 if (bytes1 != bytes1p) {
 
@@ -1937,6 +2347,129 @@ namespace SZ3 {
 
             return;
         }
+
+//        void decompressSimpleBlockingIntegers(const uchar *&lossless_data, T &px, T &py, T &pz, size_t *&datax, size_t *&datay, size_t *&dataz, size_t &outSize,
+//                                               size_t cmpSize) {
+//            uchar const *cmpData;
+////            if(cmpSize > 0){
+//            cmpData = lossless.decompress(lossless_data, cmpSize);
+////            }
+////            else{
+////                cmpData = lossless_data;
+////            }
+//
+//            SZ3::Config conf;
+//            conf.load(cmpData);
+//            outSize = conf.num;
+//
+//            if (datax == nullptr && datay == nullptr && dataz == nullptr) {
+//                datax = new size_t[3 * conf.num];
+//                datay = datax + conf.num;
+//                dataz = datay + conf.num;
+//            }
+//
+//            if (datax == nullptr) datax = new size_t[conf.num];
+//            if (datay == nullptr) datay = new size_t[conf.num];
+//            if (dataz == nullptr) dataz = new size_t[conf.num];
+//
+//            size_t bx, by, bz, nx, ny, nz, blknum;
+//
+//            read(px, cmpData);
+//            read(py, cmpData);
+//            read(pz, cmpData);
+//
+//            read(bx, cmpData);
+//            read(by, cmpData);
+//            read(bz, cmpData);
+//
+//            if (bx == 0 || by == 0 || bz == 0) {
+//
+////                memcpy(datax, cmpData, conf.num * sizeof(T));
+////                for (size_t i = 0; i < conf.num; i++) datax[i] += px;
+////                memcpy(datay, cmpData + conf.num * sizeof(T), conf.num * sizeof(T));
+////                for (size_t i = 0; i < conf.num; i++) datay[i] += py;
+////                memcpy(dataz, cmpData + (conf.num + conf.num) * sizeof(T), conf.num * sizeof(T));
+////                for (size_t i = 0; i < conf.num; i++) dataz[i] += pz;
+//
+//
+//                return;
+//            }
+//
+//            read(nx, cmpData);
+//            read(ny, cmpData);
+//            read(nz, cmpData);
+//            read(blknum, cmpData);
+//
+//            size_t remaining_length = 0;
+//
+//            encoder.load(cmpData, remaining_length);
+//            auto blkst = encoder.decode(cmpData, blknum);
+//
+//            encoder.load(cmpData, remaining_length);
+//            auto blkcnt = encoder.decode(cmpData, blknum);
+//
+//            encoder.load(cmpData, remaining_length);
+//            auto quads = encoder.decode(cmpData, conf.num);
+//
+//            encoder.load(cmpData, remaining_length);
+//            auto repos = encoder.decode(cmpData, conf.num);
+//
+//#if !__soft_eb
+//            size_t cnt_unquants, unid = nx * ny * nz + 1;
+//            read(cnt_unquants, cmpData);
+//            std::vector<T> unx(cnt_unquants), uny(cnt_unquants), unz(cnt_unquants);
+//            read(unx.data(), cnt_unquants, cmpData);
+//            read(uny.data(), cnt_unquants, cmpData);
+//            read(unz.data(), cnt_unquants, cmpData);
+//#endif
+//
+//            size_t i = 0, j = 0;
+//            for (; i < blknum; i++) {
+//
+//                if (i) blkst[i] += blkst[i - 1];
+//
+//#if !__soft_eb
+//
+//                if (blkst[i] == unid) {
+//
+//                    for (size_t j_ = 0; j_ < blkcnt[i]; j_++) {
+//                        datax[j] = unx[j_];
+//                        datay[j] = uny[j_];
+//                        dataz[j] = unz[j_];
+//                        ++j;
+//                    }
+//                    continue;
+//                }
+//#endif
+//
+//                size_t pbx = (blkst[i] % nx * 2) * bx;
+//                size_t pby = (blkst[i] / nx % ny * 2) * by;
+//                size_t pbz = (blkst[i] / nx / ny * 2) * bz;
+//
+//                size_t prequad = 0;
+//                size_t prerepos = 0;
+//
+//                for (size_t j_ = 0; j_ < blkcnt[i]; j_++) {
+//
+//                    if (quads[j] != 0) prerepos = 0;
+//                    size_t reposj = repos[j] + prerepos;
+//                    size_t quadj = quads[j] + prequad;
+//                    prerepos = reposj;
+//                    prequad = quadj;
+//
+//                    size_t idx = (pbx + ((quadj & 0x01) >> 0) * bx + (reposj % bx));
+//                    datax[j] = idx;
+//                    size_t idy = (pby + ((quadj & 0x02) >> 1) * by + (reposj / bx % by));
+//                    datay[j] = idy;
+//                    size_t idz = (pbz + ((quadj & 0x04) >> 2) * bz + (reposj / bx / by));
+//                    dataz[j] = idz;
+//
+//                    ++j;
+//                }
+//            }
+//
+//            return;
+//        }
 
         void
         decompressSimpleBlockingWithTemporalPrediction(const uchar *&lossless_data, T *&datax, T *&datay, T *&dataz,

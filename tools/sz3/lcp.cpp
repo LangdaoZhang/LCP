@@ -630,7 +630,7 @@ signed main(int argc, char *argv[]) {
     double eb = 0;
     size_t bt = 0;
 
-    uchar blkflag = 0x01;
+    uchar blkflag = 0x03;
     size_t bx = 0, by = 0, bz = 0;
 
     uchar _a = 0x00;
