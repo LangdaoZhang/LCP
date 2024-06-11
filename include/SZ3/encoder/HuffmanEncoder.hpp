@@ -1011,15 +1011,15 @@ namespace SZ3{
                 Node *t = &tree.ht[tree.root];
                 Node *n = t;
 
-                int tableSize = 1 << maxBits;
-                std::vector<int> valueTable(tableSize);
+                size_t tableSize = 1 << maxBits;
+                std::vector<T> valueTable(tableSize);
                 std::vector<uint8_t> lengthTable(tableSize);
                 std::vector<Node *> nodeTable(tableSize);
-                int j;
-                for (uint32_t i = 0; i < tableSize; i++) {
+                size_t j;
+                for (size_t i = 0; i < tableSize; i++) {
                     n = t;
                     j = 0;
-                    uint32_t res = i;
+                    size_t res = i;
                     while (!n->isLeaf() && j < maxBits) {
                         n = n->p[res & 0x00000001];
                         res >>= 1;
@@ -1035,8 +1035,8 @@ namespace SZ3{
                     }
                 }
 
-                int leftBits = 0;
-                uint32_t currentValue = 0;
+                size_t leftBits = 0;
+                T currentValue = 0;
                 size_t i = 0;
 
                 while (count < targetLength) {
@@ -1046,8 +1046,8 @@ namespace SZ3{
                         i++;
                     }
 
-                    uint32_t index = currentValue & ((1 << maxBits) - 1);
-                    int value = valueTable[index];
+                    size_t index = currentValue & ((1 << maxBits) - 1);
+                    T value = valueTable[index];
                     if (value != -1) {
                         out[count] = value;
                         int bitLength = lengthTable[index];

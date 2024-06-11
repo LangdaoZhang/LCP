@@ -2056,6 +2056,7 @@ namespace SZ3 {
                     bytes1 = nullptr;
                     compressed_size1 = 0;
                     size_midl += compressed_size1;
+                    blockSizeCache.init();
 
                     compressTemporalPredictionOnSlice(confSliceTest, datax, datay, dataz, size_midr, nullptr,
                                                       blkflag, bx, by, bz, bytes1, compressed_size1, ord1, midr);
@@ -2063,8 +2064,9 @@ namespace SZ3 {
                     bytes1 = nullptr;
                     compressed_size1 = 0;
                     size_midr += compressed_size1;
+                    blockSizeCache.init();
 
-                    printf("l:[%.2f, %zu], r:[%.2f, %zu]\n", midl, size_midl, midr, size_midr);
+//                    printf("l:[%.2f, %zu], r:[%.2f, %zu]\n", midl, size_midl, midr, size_midr);
 
                     if (size_midl < size_midr){
                         r = midr;
@@ -2074,7 +2076,7 @@ namespace SZ3 {
                     }
                 }
                 fflag = (l + r) / 2;
-                printf("fflag = %.6lf\n", fflag);
+//                printf("fflag = %.6lf\n", fflag);
             }
 
             for (size_t l = 0; l < nt; l += bt) {
