@@ -1682,7 +1682,7 @@ namespace SZ3 {
 
             Config conf1(n);
             conf1.absErrorBound = conf.absErrorBound / fflag;
-            T fflag_stride = std::max((fflag - 1) / (nt / (T) 4), fflag - 1);
+            T fflag_stride = std::min((fflag - 1) / (nt / (T) 4), fflag - 1);
 //            printf("fflag stride = %.2f\n", fflag_stride);
 
             size_t *p = new size_t[n];
@@ -2044,23 +2044,27 @@ namespace SZ3 {
             if (fflag > 1){
                 double l = 1, r = 9, midl, midr;
                 size_t size_midl, size_midr;
+                Config confSliceTest = Config(std::min(std::min(bt * 4, n > (1 << 20) ? (size_t) 16 : (size_t) 64), nt), n);
+                confSliceTest.absErrorBound = conf.absErrorBound;
                 while(r - l > 0.5){
                     midl = (l + l + r) / 3.;
                     midr = (l + r + r) / 3.;
 
-                    compressTemporalPredictionOnSlice(confSlice, datax, datay, dataz, size_midl, nullptr,
+                    compressTemporalPredictionOnSlice(confSliceTest, datax, datay, dataz, size_midl, nullptr,
                                                       blkflag, bx, by, bz, bytes1, compressed_size1, ord1, midl);
                     delete[] bytes1;
                     bytes1 = nullptr;
                     compressed_size1 = 0;
                     size_midl += compressed_size1;
 
-                    compressTemporalPredictionOnSlice(confSlice, datax, datay, dataz, size_midr, nullptr,
+                    compressTemporalPredictionOnSlice(confSliceTest, datax, datay, dataz, size_midr, nullptr,
                                                       blkflag, bx, by, bz, bytes1, compressed_size1, ord1, midr);
                     delete[] bytes1;
                     bytes1 = nullptr;
                     compressed_size1 = 0;
                     size_midr += compressed_size1;
+
+                    printf("l:[%.2f, %zu], r:[%.2f, %zu]\n", midl, size_midl, midr, size_midr);
 
                     if (size_midl < size_midr){
                         r = midr;
@@ -2110,6 +2114,8 @@ namespace SZ3 {
                     write(compressed_size1, tail1s);
                     write(bytes1, compressed_size1, tail1s);
                     delete[] bytes1p;
+
+
                 }
 
                 if (ord != nullptr) {
