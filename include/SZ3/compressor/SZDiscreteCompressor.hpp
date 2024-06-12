@@ -2017,14 +2017,16 @@ namespace SZ3 {
                     size_t cnt = 0;
                     size_t t = (nt - 1) / 2;
                     cnt += isSpatialWorse(conf, datax + t * n, datay + t * n, dataz + t * n);
+                    blockSizeCache.init();
                     t = (nt - 1) / 4;
                     cnt += isSpatialWorse(conf, datax + t * n, datay + t * n, dataz + t * n);
+                    blockSizeCache.init();
                     t = (nt - 1) / 4 * 3;
                     cnt += isSpatialWorse(conf, datax + t * n, datay + t * n, dataz + t * n);
+                    blockSizeCache.init();
                     if (cnt > 1) {
                         fflag = 6.4;
                     }
-                    blockSizeCache.init();
                 }
             }
 
