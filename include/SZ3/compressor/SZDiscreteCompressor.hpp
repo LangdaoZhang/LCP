@@ -1720,7 +1720,7 @@ namespace SZ3 {
             if (bytes1 == nullptr) {
 
 #if __batch_info
-                printf("\e[34m\e[1mnew batch, t = %zu\n\e[0m", 0);
+                printf("\e[34m\e[1mnew batch, t = %zu\n\e[0m", (size_t) 0);
 #endif
 
                 writeBytesByte(tailp, 0x00);
@@ -1752,7 +1752,7 @@ namespace SZ3 {
                 if (isTP(conf, quantizer, pdx, pdy, pdz, d1x, d1y, d1z, compressed_size1, 0x01)) {
 
 #if __batch_info
-                    printf("\e[32m\e[1mold batch, t = %zu\n\e[0m", 0);
+                    printf("\e[32m\e[1mold batch, t = %zu\n\e[0m", (size_t) 0);
 #endif
 
                     writeBytesByte(tailp, 0x01);
@@ -1781,7 +1781,7 @@ namespace SZ3 {
                     }
 
 #if __batch_info
-                    printf("\e[34m\e[1mnew batch, t = %zu\n\e[0m", 0);
+                    printf("\e[34m\e[1mnew batch, t = %zu\n\e[0m", (size_t) 0);
 #endif
 
                     writeBytesByte(tailp, 0x00);
@@ -2014,8 +2014,14 @@ namespace SZ3 {
                     ++total;
                 }
                 if (fail == 0) {
+                    size_t cnt = 0;
                     size_t t = (nt - 1) / 2;
-                    if (isSpatialWorse(conf, datax + t * n, datay + t * n, dataz + t * n)) {
+                    cnt += isSpatialWorse(conf, datax + t * n, datay + t * n, dataz + t * n);
+                    t = (nt - 1) / 4;
+                    cnt += isSpatialWorse(conf, datax + t * n, datay + t * n, dataz + t * n);
+                    t = (nt - 1) / 4 * 3;
+                    cnt += isSpatialWorse(conf, datax + t * n, datay + t * n, dataz + t * n);
+                    if (cnt > 1) {
                         fflag = 6.4;
                     }
                     blockSizeCache.init();
