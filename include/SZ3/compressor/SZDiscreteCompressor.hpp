@@ -2084,8 +2084,7 @@ namespace SZ3 {
                     }
                 }
                 fflag = (l + r) / 2;
-                fflag = 11.5;
-                printf("fflag = %.6lf\n", fflag);
+//                printf("fflag = %.6lf\n", fflag);
             }
 
             for (size_t l = 0; l < nt; l += bt) {
