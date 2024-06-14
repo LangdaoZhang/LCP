@@ -902,7 +902,7 @@ namespace SZ3 {
 #ifndef __blockst_encoding_method
             if (maxblkst <= (1 << 30) || blknum <= (1 << 20) || (1. * nx * ny * nz / blknum) < 1e6) {
 #endif
-                bytes_blkst = new uchar[std::max(blknum * 8, (size_t) 1024)], tail_blkst = bytes_blkst;
+                bytes_blkst = new uchar[std::max(blknum * 8, (size_t) (1 << 16))], tail_blkst = bytes_blkst;
                 encoder.preprocess_encode(blkst, blknum, 0, 0x00);
                 encoder.save(tail_blkst);
                 encoder.encode(blkst, blknum, tail_blkst);
@@ -2084,7 +2084,8 @@ namespace SZ3 {
                     }
                 }
                 fflag = (l + r) / 2;
-//                printf("fflag = %.6lf\n", fflag);
+                fflag = 11.5;
+                printf("fflag = %.6lf\n", fflag);
             }
 
             for (size_t l = 0; l < nt; l += bt) {
