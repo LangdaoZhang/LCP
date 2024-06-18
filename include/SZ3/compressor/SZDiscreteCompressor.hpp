@@ -257,11 +257,11 @@ namespace SZ3 {
              */
 
             size_t la = 0, ra = ceil(log2(rx / conf.absErrorBound));
-            while (ceil(rx / (2. * (1llu << la) * conf.absErrorBound)) > 1e6) ++la;
+            while (ceil(rx / (2. * (1llu << la) * conf.absErrorBound)) > 2e5) ++la;
             size_t lb = 0, rb = ceil(log2(ry / conf.absErrorBound));
-            while (ceil(ry / (2. * (1llu << lb) * conf.absErrorBound)) > 1e6) ++lb;
+            while (ceil(ry / (2. * (1llu << lb) * conf.absErrorBound)) > 2e5) ++lb;
             size_t lc = 0, rc = ceil(log2(rz / conf.absErrorBound));
-            while (ceil(rz / (2. * (1llu << lc) * conf.absErrorBound)) > 1e6) ++lc;
+            while (ceil(rz / (2. * (1llu << lc) * conf.absErrorBound)) > 2e5) ++lc;
 
 
 //            printf("l = %zu, r = %zu\n", 1llu << la, 1llu << ra);
@@ -869,12 +869,12 @@ namespace SZ3 {
             }
 
 #if !__soft_eb
-            uchar *bytes_data = new uchar[std::max(conf.num * 16, (size_t) 1024) +
+            uchar *bytes_data = new uchar[std::max(conf.num * 16, (size_t) (1 << 16)) +
                                           unx.size() * 3 * sizeof(T)], *tail_data = bytes_data;
 #endif
 
 #if __soft_eb
-            uchar *bytes_data = new uchar[std::max(conf.num*16, (size_t)1024)], *tail_data = bytes_data;
+            uchar *bytes_data = new uchar[std::max(conf.num * 16, (size_t) (1 << 16))], *tail_data = bytes_data;
 #endif
 
             SZ3::Config __conf = conf;
@@ -962,7 +962,7 @@ namespace SZ3 {
 //                printf("%zu\n", tem);
 //            }
 
-            uchar *bytes_blkcnt = new uchar[std::max(blknum * 8, (size_t) 1024)], *tail_blkcnt = bytes_blkcnt;
+            uchar *bytes_blkcnt = new uchar[std::max(blknum * 8, (size_t) (1 << 16))], *tail_blkcnt = bytes_blkcnt;
             encoder.preprocess_encode(blkcnt, blknum, 0, 0xc0);
             encoder.save(tail_blkcnt);
             encoder.encode(blkcnt, blknum, tail_blkcnt);
@@ -1057,8 +1057,8 @@ namespace SZ3 {
             if (bx * by * bz <= (1llu << 48)) {
 #endif
                 bytes_repos = new uchar[std::max(
-                        conf.num * std::max((size_t) 4, (size_t) ceil(log2(1. * bx * by * bz))),
-                        (size_t) 1024)], tail_repos = bytes_repos;
+                        conf.num * std::max((size_t) 4, (size_t) ceil(log2(1. * bx * by * bz) / 4.)),
+                        (size_t) (1 << 16))], tail_repos = bytes_repos;
                 encoder.preprocess_encode(repos, conf.num, 0, 0x00);
                 encoder.save(tail_repos);
                 encoder.encode(repos, conf.num, tail_repos);
@@ -1989,7 +1989,7 @@ namespace SZ3 {
         uchar *compressSimpleBlockingWithTemporalPrediction(const Config &conf, size_t bt, T *datax, T *datay, T *dataz,
                                                             size_t &compressed_size, size_t *ord = nullptr,
                                                             uchar blkflag = 0x00, size_t bx = 0, size_t by = 0,
-                                                            size_t bz = 0) {
+                                                            size_t bz = 0, double fflagInit = 0) {
 
             assert(conf.N == 2);
 
@@ -1998,7 +1998,9 @@ namespace SZ3 {
 
             T fflag = 1;
 
-            if (nt >= 64) {
+            if (fflagInit > 1) {
+                fflag = fflagInit;
+            } else if (nt >= 64) {
                 size_t fail = 0, total = 0;
                 T radius = (1 << 16) * conf.absErrorBound;
                 for (size_t i = 0; i < n; i += n / 100) {
@@ -2049,7 +2051,9 @@ namespace SZ3 {
             size_t *ord1 = new size_t[n];
             int cnt1 = -1;
 
-            if (fflag > 1){
+            if (fflagInit > 1) {
+
+            } else if (fflag > 1) {
                 double l = 1, r = 9, midl, midr;
                 size_t size_midl, size_midr;
                 Config confSliceTest = Config(std::min(std::min(bt * 4, n > (1 << 20) ? (size_t) 16 : (size_t) 64), nt), n);

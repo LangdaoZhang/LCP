@@ -278,7 +278,7 @@ void compress2(char *inPath[], size_t num_inPath, char *cmpPath, SZ3::Config con
 template<class T>
 void compress2WithTemporalPrediction(char *inPath[], size_t num_inPath, char *cmpPath, SZ3::Config conf, T *oridata,
                                      size_t *ord, size_t bt, uchar blkflag = 0x00, size_t bx = 0, size_t by = 0,
-                                     size_t bz = 0) {
+                                     size_t bz = 0, double fflagInit = 0) {
 
     T *data = readFile<T>(inPath, num_inPath, conf.num);
     T *datax = data, *datay = datax + conf.num, *dataz = datay + conf.num;
@@ -297,7 +297,7 @@ void compress2WithTemporalPrediction(char *inPath[], size_t num_inPath, char *cm
             SZ3::HuffmanEncoder<size_t>(), SZ3::Lossless_zstd());
 
     uchar *bytes = compressor.compressSimpleBlockingWithTemporalPrediction(conf, bt, datax, datay, dataz, outSize, ord,
-                                                                           blkflag, bx, by, bz);
+                                                                           blkflag, bx, by, bz, fflagInit);
 
     double compress_time = timer.stop();
 
@@ -633,6 +633,8 @@ signed main(int argc, char *argv[]) {
     uchar blkflag = 0x03;
     size_t bx = 0, by = 0, bz = 0;
 
+    double fflagInit = 0;
+
     uchar _a = 0x00;
 
     for (int i = 1; i < argc; i++) {
@@ -696,6 +698,10 @@ signed main(int argc, char *argv[]) {
                 sscanf(argv[i + 3], "%zu", &bz);
                 i += 3;
             }
+        } else if (strcmp(argv[i], "-fflag") == 0) {
+            assert(i + 1 < argc);
+            sscanf(argv[i + 1], "%lf", &fflagInit);
+            i += 1;
         } else {
             usage();
         }
@@ -727,7 +733,7 @@ signed main(int argc, char *argv[]) {
             case 2: {
                 if (bt > 0) {
                     compress2WithTemporalPrediction<float>(inPath, 3, cmpPath, conf, oridata, ord, bt, blkflag, bx, by,
-                                                           bz);
+                                                           bz, fflagInit);
                 } else {
                     compress2<float>(inPath, 3, cmpPath, conf, oridata, ord, blkflag, bx, by, bz);
                 }
