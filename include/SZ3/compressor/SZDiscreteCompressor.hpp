@@ -639,100 +639,17 @@ namespace SZ3 {
             size_t *repos = new size_t[conf.num];
 //            size_t *reposs = new size_t[conf.num * 3], *reposx = reposs, *reposy = reposx + conf.num, *reposz = reposy + conf.num;
 #if !__soft_eb
-            size_t unid = nx * ny * nz + 1;
-            std::vector<T> unx, uny, unz; // unqiantized data
+            std::vector<size_t> unx, uny, unz;
 #endif
+
+            size_t *inord = nullptr;
 
             if (ord == nullptr) {
+                inord = new size_t[conf.num];
+                ord = inord;
+            }
 
-                Node *vec = new Node[conf.num]{};
-
-                for (size_t i = 0; i < conf.num; i++) {
-
-                    size_t x = (datax[i] - px) / (conf.absErrorBound);
-                    x = (x + 0) / 2;
-                    size_t y = (datay[i] - py) / (conf.absErrorBound);
-                    y = (y + 0) / 2;
-                    size_t z = (dataz[i] - pz) / (conf.absErrorBound);
-                    z = (z + 0) / 2;
-
-#if !__soft_eb
-
-                    T decx = (x << 1 | 1) * conf.absErrorBound + px, decy =
-                            (y << 1 | 1) * conf.absErrorBound + py, decz = (z << 1 | 1) * conf.absErrorBound + pz;
-
-                    if (fabs(decx - datax[i]) > conf.absErrorBound || fabs(decy - datay[i]) > conf.absErrorBound ||
-                        fabs(decz - dataz[i]) > conf.absErrorBound) {
-                        unx.push_back(datax[i]);
-                        uny.push_back(datay[i]);
-                        unz.push_back(dataz[i]);
-                        Node tem(unid, unx.size() - 1);
-                        vec[i] = tem;
-                        continue;
-                    }
-#endif
-
-                    size_t cx = x / bx;
-                    size_t dx = x % bx;
-                    size_t cy = y / by;
-                    size_t dy = y % by;
-                    size_t cz = z / bz;
-                    size_t dz = z % bz;
-
-                    Node tem(cx / 2 + cy / 2 * nx + cz / 2 * nx * ny,
-                             (dx + dy * bx + dz * bx * by) | ((cx & 1) << 60) | ((cy & 1) << 61) | ((cz & 1) << 62));
-//                    Node tem(arr3(x / bx, y / by, z / bz), dx + dy * bx + dz * bx * by);
-                    vec[i] = tem;
-                }
-
-//                Timer timer(true);
-
-//                std::sort(vec,vec+conf.num,[&](Node& u, Node& v){return u.id==v.id?u.reid<v.reid:u.id<v.id;});
-                radix_sort<Node>(vec, vec + conf.num);
-
-//                double sort_time = timer.stop();
-
-//                printf("sort time = %fs\n", sort_time);
-
-                for (size_t i = 1; i < conf.num; i++) {
-                    if (vec[i].id != vec[i - 1].id) ++blknum;
-                }
-
-                blkst = new size_t[blknum];
-                blkcnt = new size_t[blknum]{};
-
-                size_t i = -1;
-                size_t j = 0;
-                size_t pre = -1;
-                size_t prequad = 0;
-                size_t prereid = 0;
-                for (; j < conf.num; j++) {
-                    Node &node = vec[j];
-                    size_t &id = node.id;
-                    size_t quad = node.reid >> 60;
-//                                              ++++----++++----
-                    size_t reid = node.reid & 0x0fffffffffffffff;
-
-                    if (id != pre) {
-                        blkst[++i] = pre = id;
-                        prequad = 0;
-                        prereid = 0;
-                    } else if (quad != prequad) {
-                        prereid = 0;
-                    }
-                    ++blkcnt[i];
-
-                    quads[j] = quad - prequad;
-                    repos[j] = reid - prereid;
-//                    reposx[j] = reid % bx;
-//                    reposy[j] = reid / bx % by;
-//                    reposz[j] = reid / bx / by;
-                    prequad = quad;
-                    prereid = reid;
-                }
-
-                delete[] vec;
-            } else {
+            {
 
                 NodeWithOrder *vec = new NodeWithOrder[conf.num]{};
 
@@ -749,14 +666,24 @@ namespace SZ3 {
                     T decx = (x << 1 | 1) * conf.absErrorBound + px, decy =
                             (y << 1 | 1) * conf.absErrorBound + py, decz = (z << 1 | 1) * conf.absErrorBound + pz;
 
-                    if (fabs(decx - datax[i]) > conf.absErrorBound || fabs(decy - datay[i]) > conf.absErrorBound ||
-                        fabs(decz - dataz[i]) > conf.absErrorBound) {
-                        unx.push_back(datax[i]);
-                        uny.push_back(datay[i]);
-                        unz.push_back(dataz[i]);
-                        NodeWithOrder tem(unid, unx.size() - 1, i);
-                        vec[i] = tem;
-                        continue;
+//                    if (fabs(decx - datax[i]) > conf.absErrorBound || fabs(decy - datay[i]) > conf.absErrorBound ||
+//                        fabs(decz - dataz[i]) > conf.absErrorBound) {
+//                        unx.push_back(datax[i]);
+//                        uny.push_back(datay[i]);
+//                        unz.push_back(dataz[i]);
+//                        NodeWithOrder tem(unid, unx.size() - 1, i);
+//                        vec[i] = tem;
+//                        continue;
+//                    }
+
+                    if (fabs(decx - datax[i]) > conf.absErrorBound) {
+                        unx.push_back(i << 1 | (decx > datax[i] ? 1 : 0));
+                    }
+                    if (fabs(decy - datay[i]) > conf.absErrorBound) {
+                        uny.push_back(i << 1 | (decy > datay[i] ? 1 : 0));
+                    }
+                    if (fabs(decz - dataz[i]) > conf.absErrorBound) {
+                        unz.push_back(i << 1 | (decz > dataz[i] ? 1 : 0));
                     }
 #endif
 
@@ -1152,18 +1079,55 @@ namespace SZ3 {
 #endif
 
 #if !__soft_eb
-//            printf("unpred = %zu\n", unx.size());
-            write(unx.size(), tail_data);
-            write(unx.data(), unx.size(), tail_data);
-            write(uny.data(), uny.size(), tail_data);
-            write(unz.data(), unz.size(), tail_data);
-//            unx.clear();
-//            unx.shrink_to_fit();
-//            uny.clear();
-//            uny.shrink_to_fit();
-//            unz.clear();
-//            unz.shrink_to_fit();
+            {
+                size_t *ordv = new size_t[conf.num];
+                for (size_t i = 0; i < conf.num; i++) {
+                    ordv[ord[i]] = i;
+                }
+
+                {
+                    for (size_t i = 0; i < unx.size(); i++) {
+                        unx[i] = (ordv[unx[i] >> 1] << 1) | (unx[i] & 1);
+                    }
+                    std::sort(unx.begin(), unx.end());
+                    if (unx.size() > 0)
+                    for (size_t i = unx.size() - 1; i > 0; i--) {
+                        unx[i] -= unx[i - 1];
+                    }
+                    write(unx, tail_data);
+                }
+
+                {
+                    for (size_t i = 0; i < uny.size(); i++) {
+                        uny[i] = (ordv[uny[i] >> 1] << 1) | (uny[i] & 1);
+                    }
+                    std::sort(uny.begin(), uny.end());
+                    if (uny.size() > 0)
+                    for (size_t i = uny.size() - 1; i > 0; i--) {
+                        uny[i] -= uny[i - 1];
+                    }
+                    write(uny, tail_data);
+                }
+
+                {
+                    for (size_t i = 0; i < unz.size(); i++) {
+                        unz[i] = (ordv[unz[i] >> 1] << 1) | (unz[i] & 1);
+                    }
+                    std::sort(unz.begin(), unz.end());
+                    if (unz.size() > 0)
+                    for (size_t i = unz.size() - 1; i > 0; i--) {
+                        unz[i] -= unz[i - 1];
+                    }
+                    write(unz, tail_data);
+                }
+
+                delete[] ordv;
+            }
 #endif
+
+            if (inord != nullptr) {
+                delete[] inord;
+            }
 
             uchar *lossless_data = lossless.compress(bytes_data, tail_data - bytes_data, compressed_size);
             delete[] bytes_data;
@@ -2312,32 +2276,22 @@ namespace SZ3 {
             auto repos = encoder.decode(cmpData, conf.num);
 
 #if !__soft_eb
-            size_t cnt_unquants, unid = nx * ny * nz + 1;
-            read(cnt_unquants, cmpData);
-            std::vector<T> unx(cnt_unquants), uny(cnt_unquants), unz(cnt_unquants);
-            read(unx.data(), cnt_unquants, cmpData);
-            read(uny.data(), cnt_unquants, cmpData);
-            read(unz.data(), cnt_unquants, cmpData);
+            std::vector<size_t> unx, uny, unz;
+
+            read(unx, cmpData);
+            for(size_t i = 1; i < unx.size(); i++) unx[i] += unx[i - 1];
+
+            read(uny, cmpData);
+            for(size_t i = 1; i < uny.size(); i++) uny[i] += uny[i - 1];
+
+            read(unz, cmpData);
+            for(size_t i = 1; i < unz.size(); i++) unz[i] += unz[i - 1];
 #endif
 
             size_t i = 0, j = 0;
             for (; i < blknum; i++) {
 
                 if (i) blkst[i] += blkst[i - 1];
-
-#if !__soft_eb
-
-                if (blkst[i] == unid) {
-
-                    for (size_t j_ = 0; j_ < blkcnt[i]; j_++) {
-                        datax[j] = unx[j_];
-                        datay[j] = uny[j_];
-                        dataz[j] = unz[j_];
-                        ++j;
-                    }
-                    continue;
-                }
-#endif
 
                 size_t pbx = (blkst[i] % nx * 2) * bx;
                 size_t pby = (blkst[i] / nx % ny * 2) * by;
@@ -2364,6 +2318,34 @@ namespace SZ3 {
                     ++j;
                 }
             }
+
+#if !__soft_eb
+            for (size_t it : unx) {
+                if (it & 1) {
+                    datax[it >> 1] -= conf.absErrorBound;
+                }
+                else {
+                    datax[it >> 1] += conf.absErrorBound;
+                }
+            }
+            for (size_t it : uny) {
+                if (it & 1) {
+                    datay[it >> 1] -= conf.absErrorBound;
+                }
+                else {
+                    datay[it >> 1] += conf.absErrorBound;
+                }
+            }
+            for (size_t it : unz) {
+                if (it & 1) {
+                    dataz[it >> 1] -= conf.absErrorBound;
+                }
+                else {
+                    dataz[it >> 1] += conf.absErrorBound;
+                }
+            }
+
+#endif
 
             return;
         }
