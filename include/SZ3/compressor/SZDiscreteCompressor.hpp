@@ -1094,7 +1094,13 @@ namespace SZ3 {
                     for (size_t i = unx.size() - 1; i > 0; i--) {
                         unx[i] -= unx[i - 1];
                     }
-                    write(unx, tail_data);
+
+                    write(unx.size(), tail_data);
+                    if (unx.size() > 0) {
+                        encoder.preprocess_encode(unx.data(), unx.size(), 0);
+                        encoder.save(tail_data);
+                        encoder.encode(unx.data(), unx.size(), tail_data);
+                    }
                 }
 
                 {
@@ -1106,7 +1112,13 @@ namespace SZ3 {
                     for (size_t i = uny.size() - 1; i > 0; i--) {
                         uny[i] -= uny[i - 1];
                     }
-                    write(uny, tail_data);
+
+                    write(uny.size(), tail_data);
+                    if (uny.size() > 0) {
+                        encoder.preprocess_encode(uny.data(), uny.size(), 0);
+                        encoder.save(tail_data);
+                        encoder.encode(uny.data(), uny.size(), tail_data);
+                    }
                 }
 
                 {
@@ -1118,8 +1130,16 @@ namespace SZ3 {
                     for (size_t i = unz.size() - 1; i > 0; i--) {
                         unz[i] -= unz[i - 1];
                     }
-                    write(unz, tail_data);
+
+                    write(unz.size(), tail_data);
+                    if (unz.size() > 0) {
+                        encoder.preprocess_encode(unz.data(), unz.size(), 0);
+                        encoder.save(tail_data);
+                        encoder.encode(unz.data(), unz.size(), tail_data);
+                    }
                 }
+
+//                printf("%zu %zu %zu\n", unx.size(), uny.size(), unz.size());
 
                 delete[] ordv;
             }
@@ -2018,11 +2038,11 @@ namespace SZ3 {
             if (fflagInit > 1) {
 
             } else if (fflag > 1) {
-                double l = 1, r = 9, midl, midr;
+                double l = 1, r = 24, midl, midr;
                 size_t size_midl, size_midr;
                 Config confSliceTest = Config(std::min(std::min(bt * 4, n > (1 << 20) ? (size_t) 16 : (size_t) 64), nt), n);
                 confSliceTest.absErrorBound = conf.absErrorBound;
-                while(r - l > 0.5){
+                while(r - l > 1){
                     midl = (l + l + r) / 3.;
                     midr = (l + r + r) / 3.;
 
@@ -2052,8 +2072,9 @@ namespace SZ3 {
                     }
                 }
                 fflag = (l + r) / 2;
-//                printf("fflag = %.6lf\n", fflag);
             }
+
+//            printf("fflag = %.6lf\n", fflag);
 
             for (size_t l = 0; l < nt; l += bt) {
 
@@ -2276,16 +2297,29 @@ namespace SZ3 {
             auto repos = encoder.decode(cmpData, conf.num);
 
 #if !__soft_eb
+            size_t unxsize, unysize, unzsize;
             std::vector<size_t> unx, uny, unz;
 
-            read(unx, cmpData);
-            for(size_t i = 1; i < unx.size(); i++) unx[i] += unx[i - 1];
+            read(unxsize, cmpData);
+            if (unxsize > 0) {
+                encoder.load(cmpData, remaining_length);
+                unx = encoder.decode(cmpData, unxsize);
+                for (size_t i = 1; i < unx.size(); i++) unx[i] += unx[i - 1];
+            }
 
-            read(uny, cmpData);
-            for(size_t i = 1; i < uny.size(); i++) uny[i] += uny[i - 1];
+            read(unysize, cmpData);
+            if (unysize > 0) {
+                encoder.load(cmpData, remaining_length);
+                uny = encoder.decode(cmpData, unysize);
+                for (size_t i = 1; i < uny.size(); i++) uny[i] += uny[i - 1];
+            }
 
-            read(unz, cmpData);
-            for(size_t i = 1; i < unz.size(); i++) unz[i] += unz[i - 1];
+            read(unzsize, cmpData);
+            if (unzsize > 0) {
+                encoder.load(cmpData, remaining_length);
+                unz = encoder.decode(cmpData, unzsize);
+                for (size_t i = 1; i < unz.size(); i++) unz[i] += unz[i - 1];
+            }
 #endif
 
             size_t i = 0, j = 0;
