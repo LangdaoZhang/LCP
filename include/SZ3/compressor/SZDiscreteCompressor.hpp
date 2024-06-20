@@ -100,33 +100,46 @@ namespace SZ3 {
 //        class StaticArrayManager {
 //        public:
 //            StaticArrayManager() {
-//                mp = std::map<size_t, Type *>();
-//
+//                mp = std::map<size_t, std::map<std::string, Type *>>();
 //            }
 //
-//            Type *getArray(size_t n) {
+//            Type *getArray(size_t n, std::string flag) {
 //                if (mp.find(n) == mp.end()) {
-//                    mp[n] = new Type[n];
+//                    mp[n] = std::map<std::string, Type *>();
+//                    mp[n][flag] = new Type[n];
+//
+//                } else {
+//                    if (mp[n].find(flag) == mp[n].end()) {
+//                        mp[n][flag] = new Type[n];
+//                    }
 //                }
-//                return mp[n];
+//                return mp[n][flag];
 //            }
 //
 //            void clear() {
-//                for (const auto [key, value]: mp) {
-//                    delete[] value;
+//                for (const auto [key_n, mp_n] : mp) {
+//                    for (const auto [key_flag, ptr]: mp_n) {
+//                        delete[] ptr;
+//                    }
+//                    mp_n.clear();
 //                }
 //                mp.clear();
 //            }
 //
-//            void erase(size_t n) {
+//            void erase(size_t n, std::string flag) {
 //                if (mp.find(n) != mp.end()) {
-//                    delete[] mp[n];
-//                    mp.erase(n);
+//                    if (mp[n].find(flag) != mp[n].end()) {
+//                        delete[] mp[n][flag];
+//                        mp[n].erase(flag);
+//                        if (mp[n].empty()) {
+//                            mp.erase(n);
+//                        }
+//                    }
 //                }
 //            }
 //
 //        private:
-//            std::map<size_t, Type *> mp;
+//            std::map<size_t, std::map<std::string, Type *>> mp;
 //        };
 //
 //        StaticArrayManager<T> staticArrayManagerT;
@@ -262,6 +275,13 @@ namespace SZ3 {
             while (ceil(ry / (2. * (1llu << lb) * conf.absErrorBound)) > 2e5) ++lb;
             size_t lc = 0, rc = ceil(log2(rz / conf.absErrorBound));
             while (ceil(rz / (2. * (1llu << lc) * conf.absErrorBound)) > 2e5) ++lc;
+
+//            if (std::max(std::max(la, lb), lc) <= 8 && 8 <= std::min(std::min(ra, rb), rc)) {
+//                return {8, 8, 8};
+//            }
+//            else{
+//                return {0, 0, 0};
+//            }
 
 
 //            printf("l = %zu, r = %zu\n", 1llu << la, 1llu << ra);
@@ -797,7 +817,7 @@ namespace SZ3 {
 
 #if !__soft_eb
             uchar *bytes_data = new uchar[std::max(conf.num * 16, (size_t) (1 << 16)) +
-                                          unx.size() * 3 * sizeof(T)], *tail_data = bytes_data;
+                                          (unx.size() + uny.size() + unz.size()) * 8], *tail_data = bytes_data;
 #endif
 
 #if __soft_eb
@@ -829,7 +849,7 @@ namespace SZ3 {
 #ifndef __blockst_encoding_method
             if (maxblkst <= (1 << 30) || blknum <= (1 << 20) || (1. * nx * ny * nz / blknum) < 1e6) {
 #endif
-                bytes_blkst = new uchar[std::max(blknum * 8, (size_t) (1 << 16))], tail_blkst = bytes_blkst;
+                bytes_blkst = new uchar[std::max(blknum * 16, (size_t) (1 << 16))], tail_blkst = bytes_blkst;
                 encoder.preprocess_encode(blkst, blknum, 0, 0x00);
                 encoder.save(tail_blkst);
                 encoder.encode(blkst, blknum, tail_blkst);
