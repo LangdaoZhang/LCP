@@ -619,16 +619,20 @@ signed main(int argc, char *argv[]) {
     for (int i = 0; i < 3; i++) inPath[i] = new char[1024];
     for (int i = 0; i < 3; i++) outPath[i] = new char[1024];
     char cmpPath[1024];
+    char ordPath[1024];
 
-    uchar cmp = 0x00, decmp = 0x00, flag = 0x00;
+    uchar cmp = 0x00, decmp = 0x00, flag = 0x00, output_ord = 0x00;
+    size_t ordBits = 64;
     /*
      * flag = 1, compress without time dimension
      * flag = 2, compress with time dimension
      * flag = 3, blocking compression without time dimension
      */
     size_t nt, n;
-    double eb = 0;
-    size_t bt = 0;
+    // default eb = 1e-3
+    double eb = 1e-3;
+    // default bt = 16
+    size_t bt = 16;
 
     uchar blkflag = 0x03;
     size_t bx = 0, by = 0, bz = 0;
@@ -658,9 +662,9 @@ signed main(int argc, char *argv[]) {
             i += 3;
         } else if (strcmp(argv[i], "-osn") == 0) {
             // output same name
-            snprintf(outPath[0], 1024, "%s.sz.out", inPath[0]);
-            snprintf(outPath[1], 1024, "%s.sz.out", inPath[1]);
-            snprintf(outPath[2], 1024, "%s.sz.out", inPath[2]);
+            snprintf(outPath[0], 1024, "%s.lcp.out", inPath[0]);
+            snprintf(outPath[1], 1024, "%s.lcp.out", inPath[1]);
+            snprintf(outPath[2], 1024, "%s.lcp.out", inPath[2]);
             decmp = 0x01;
         } else if (strcmp(argv[i], "-eb") == 0) {
             assert(i + 1 < argc);
@@ -702,6 +706,17 @@ signed main(int argc, char *argv[]) {
             assert(i + 1 < argc);
             sscanf(argv[i + 1], "%lf", &fflagInit);
             i += 1;
+        } else if (strcmp(argv[i], "-ord") == 0) {
+            assert(i + 2 < argc);
+            sscanf(argv[i + 1], "%zu", &ordBits);
+//            assert(ordBits == 32 || ordBits == 64);
+            if (ordBits != 32 && ordBits != 64) {
+                printf("ordBits must be 32 or 64.\n");
+                exit(-1);
+            }
+            sscanf(argv[i + 2], "%s", ordPath);
+            output_ord = 0x01;
+            i += 2;
         } else {
             usage();
         }
@@ -715,9 +730,9 @@ signed main(int argc, char *argv[]) {
     float *oridata = nullptr;
     size_t *ord = nullptr;
 
-    if (_a) {
+    if (_a || output_ord) {
         if (cmp == 0x00) {
-            printf("Must contain input while using -a\n");
+            printf("Must contain input while using -a or -ord\n");
             exit(-1);
         }
         oridata = new float[conf.num * 3];
@@ -747,6 +762,20 @@ signed main(int argc, char *argv[]) {
             default: {
                 exit(0);
             }
+        }
+    }
+
+    if (output_ord) {
+        if (ordBits == 32) {
+            uint32_t *ordu32 = new uint32_t[conf.num];
+            for (size_t i = 0; i < conf.num; i++) {
+                ordu32[i] = ord[i];
+            }
+            SZ3::writefile(ordPath, ordu32, conf.num);
+            delete[] ordu32;
+        }
+        else {
+            SZ3::writefile(ordPath, ord, conf.num);
         }
     }
 

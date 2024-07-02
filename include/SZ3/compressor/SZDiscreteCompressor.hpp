@@ -1110,7 +1110,7 @@ namespace SZ3 {
                         unx[i] = (ordv[unx[i] >> 1] << 1) | (unx[i] & 1);
                     }
                     std::sort(unx.begin(), unx.end());
-                    if (unx.size() > 0)
+                    if (unx.size() > 1)
                     for (size_t i = unx.size() - 1; i > 0; i--) {
                         unx[i] -= unx[i - 1];
                     }
@@ -1128,7 +1128,7 @@ namespace SZ3 {
                         uny[i] = (ordv[uny[i] >> 1] << 1) | (uny[i] & 1);
                     }
                     std::sort(uny.begin(), uny.end());
-                    if (uny.size() > 0)
+                    if (uny.size() > 1)
                     for (size_t i = uny.size() - 1; i > 0; i--) {
                         uny[i] -= uny[i - 1];
                     }
@@ -1146,7 +1146,7 @@ namespace SZ3 {
                         unz[i] = (ordv[unz[i] >> 1] << 1) | (unz[i] & 1);
                     }
                     std::sort(unz.begin(), unz.end());
-                    if (unz.size() > 0)
+                    if (unz.size() > 1)
                     for (size_t i = unz.size() - 1; i > 0; i--) {
                         unz[i] -= unz[i - 1];
                     }
@@ -1163,6 +1163,9 @@ namespace SZ3 {
 
                 delete[] ordv;
             }
+
+//            size_t num_unquants = unx.size() + uny.size() + unz.size();
+//            printf("%zu %.6lf%%\n", num_unquants, 100. / 3. * num_unquants / conf.num);
 #endif
 
             if (inord != nullptr) {
@@ -2002,7 +2005,7 @@ namespace SZ3 {
 
             T fflag = 1;
 
-            if (fflagInit > 1) {
+            if (fflagInit >= 1) {
                 fflag = fflagInit;
             } else if (nt >= 64) {
                 size_t fail = 0, total = 0;
