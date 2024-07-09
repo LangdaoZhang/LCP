@@ -88,7 +88,7 @@ namespace SZ3 {
             }
         };
 
-//        T sq(T x){return x*x;}
+//        T sq(T x){ return x*x; }
         T sq(T x) { return fabs(x); }
 
         template<class Type>
@@ -216,7 +216,7 @@ namespace SZ3 {
             memset(cnt, 0x00, sizeof(cnt));
             size_t qx, qy, qz;
 
-            for (size_t i = 0; i < 100; i++) {
+            for (size_t i = 0; i < n; i++) {
                 qx = (datax[i] - px) / rx * b;
                 qy = (datay[i] - py) / ry * b;
                 qz = (dataz[i] - pz) / rz * b;
@@ -877,6 +877,9 @@ namespace SZ3 {
                 delete[] lossless.compress(tail_data, vtail_data - tail_data, cmpSize1);
 //                printf("blkst %zu %zu\n", (size_t)(tail_blkst - bytes_blkst), (size_t)(vtail_data - tail_data));
 //                printf("blkst %zu %zu\n", cmpSize0, cmpSize1);
+//                printf("blkst %zu %zu\n", cmpSize0, cmpSize1);
+//                printf("blkst %.2lf KB %.2lf KB\n", 1. * cmpSize0 / 1024, 1. * cmpSize1 / 1024);
+//                printf("blkst %.2lf MB %.2lf MB\n", 1. * cmpSize0 / 1024 / 1024, 1. * cmpSize1 / 1024 / 1024);
                 if (cmpSize0 < cmpSize1) {
                     write(bytes_blkst, tail_blkst - bytes_blkst, tail_data);
                 } else {
@@ -964,6 +967,9 @@ namespace SZ3 {
             encoder.save(vtail_data);
             encoder.encode(quads, conf.num, vtail_data);
 
+//            size_t cmpSizeRepos0 = 0;
+//            size_t cmpSizeRepos1 = 0;
+
 #ifdef  __repos_encoding_method
 #if __repos_encoding_method == __huf
             write(bytes_quads, tail_quads - bytes_quads, tail_data);
@@ -977,6 +983,8 @@ namespace SZ3 {
                 delete[] lossless.compress(tail_data, vtail_data - tail_data, cmpSize1);
 //                printf("quads %zu %zu\n", (size_t) (tail_quads - bytes_quads), (size_t) (vtail_data - tail_data));
 //                printf("quads %zu %zu\n", cmpSize0, cmpSize1);
+//                cmpSizeRepos0 += cmpSize0;
+//                cmpSizeRepos1 += cmpSize1;
                 if (cmpSize0 < cmpSize1) {
                     write(bytes_quads, tail_quads - bytes_quads, tail_data);
                 } else {
@@ -1033,6 +1041,11 @@ namespace SZ3 {
                 delete[] lossless.compress(tail_data, vtail_data - tail_data, cmpSize1);
 //                printf("repos %zu %zu\n", (size_t) (tail_repos - bytes_repos), (size_t) (vtail_data - tail_data));
 //                printf("repos %zu %zu\n", cmpSize0, cmpSize1);
+//                cmpSizeRepos0 += cmpSize0;
+//                cmpSizeRepos1 += cmpSize1;
+//                printf("repos %zu %zu\n", cmpSizeRepos0, cmpSizeRepos1);
+//                printf("repos %.2lf KB %.2lf KB\n", 1. * cmpSizeRepos0 / 1024, 1. * cmpSizeRepos1 / 1024);
+//                printf("repos %.2lf MB %.2lf MB\n", 1. * cmpSizeRepos0 / 1024 / 1024, 1. * cmpSizeRepos1 / 1024 / 1024);
                 if (cmpSize0 < cmpSize1) {
                     write(bytes_repos, tail_repos - bytes_repos, tail_data);
                 } else {
@@ -2130,6 +2143,8 @@ namespace SZ3 {
 //                                                                      blkflag, bx, by, bz, bytes1,
 //                                                                      compressed_size1, ord1);
 
+//                size_t test_size = slice_compressed_size;
+
                 if (bytes1 != bytes1p) {
 
                     ++cnt1;
@@ -2137,8 +2152,10 @@ namespace SZ3 {
                     write(bytes1, compressed_size1, tail1s);
                     delete[] bytes1p;
 
-
+//                    test_size += compressed_size1;
                 }
+
+//                printf("%zu\n", test_size);
 
                 if (ord != nullptr) {
                     for (size_t t = l; t < r; t++) {
