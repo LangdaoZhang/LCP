@@ -188,6 +188,12 @@ namespace SZ3 {
             return unpred.size();
         }
 
+        void mergeUnpreds(LinearQuantizer<T> &b) {
+            for (T it : b.unpred) {
+                unpred.push_back(it);
+            }
+        }
+
 
         virtual void postcompress_data() {
         }
