@@ -21,7 +21,7 @@
 
 #define __OUTPUT_INFO 0
 #define __soft_eb 0
-#define __batch_info 1
+#define __batch_info 0
 
 #define __fix 1
 #define __huf 0
@@ -1017,10 +1017,10 @@ namespace SZ3 {
 
 #if __OUTPUT_INFO
 
-//            printf("size of quads = %.2lf MB, %zu bytes\n", 1. * (tail_quads - bytes_quads) / 1024 / 1024, tail_quads - bytes_quads);
-//            size_t cmpQuadsSize;
-//            delete[] lossless.compress(bytes_quads, tail_quads - bytes_quads, cmpQuadsSize);
-//            printf("size of compressed blkcnt = %.2lf MB, %zu bytes\n", 1. * cmpQuadsSize / 1024 / 1024, cmpQuadsSize);
+            //            printf("size of quads = %.2lf MB, %zu bytes\n", 1. * (tail_quads - bytes_quads) / 1024 / 1024, tail_quads - bytes_quads);
+            //            size_t cmpQuadsSize;
+            //            delete[] lossless.compress(bytes_quads, tail_quads - bytes_quads, cmpQuadsSize);
+            //            printf("size of compressed blkcnt = %.2lf MB, %zu bytes\n", 1. * cmpQuadsSize / 1024 / 1024, cmpQuadsSize);
 
 #endif
 
@@ -1146,9 +1146,9 @@ namespace SZ3 {
                     }
                     std::sort(unx.begin(), unx.end());
                     if (unx.size() > 1)
-                    for (size_t i = unx.size() - 1; i > 0; i--) {
-                        unx[i] -= unx[i - 1];
-                    }
+                        for (size_t i = unx.size() - 1; i > 0; i--) {
+                            unx[i] -= unx[i - 1];
+                        }
 
                     write(unx.size(), tail_data);
                     if (unx.size() > 0) {
@@ -1164,9 +1164,9 @@ namespace SZ3 {
                     }
                     std::sort(uny.begin(), uny.end());
                     if (uny.size() > 1)
-                    for (size_t i = uny.size() - 1; i > 0; i--) {
-                        uny[i] -= uny[i - 1];
-                    }
+                        for (size_t i = uny.size() - 1; i > 0; i--) {
+                            uny[i] -= uny[i - 1];
+                        }
 
                     write(uny.size(), tail_data);
                     if (uny.size() > 0) {
@@ -1182,9 +1182,9 @@ namespace SZ3 {
                     }
                     std::sort(unz.begin(), unz.end());
                     if (unz.size() > 1)
-                    for (size_t i = unz.size() - 1; i > 0; i--) {
-                        unz[i] -= unz[i - 1];
-                    }
+                        for (size_t i = unz.size() - 1; i > 0; i--) {
+                            unz[i] -= unz[i - 1];
+                        }
 
                     write(unz.size(), tail_data);
                     if (unz.size() > 0) {
@@ -1310,10 +1310,29 @@ namespace SZ3 {
 
 //        IsTPCache isTpCacheFirst, isTpCacheBatch;
 
-        void getTPArray1D(T *data,T *predData, size_t *err, LinearQuantizer<T> &quantizer, size_t n) {
+        void getTPArray1D(T *data, T *predData, size_t *err, LinearQuantizer<T> &quantizer, size_t n) {
             for (size_t i = 0; i < n; i++) {
+                err[i] = quantizer.quantize(data[i], predData[i]);
+                if (err[i] == 0) {
+                    quantizer.insertUnpred(data[i]);
+                }
+            }
+        }
+
+        void overwriteTPData1D(T *data, T *predData, LinearQuantizer<T> &quantizer, size_t n) {
+            for (size_t i = 0; i < n; i++) {
+                quantizer.overwrite(data[i], predData[i]);
+            }
+        }
+
+        size_t tem = 0;
+
+        void getTPArray1DOverwrite(T *data, T *predData, size_t *err, LinearQuantizer<T> &quantizer, size_t n) {
+            for (size_t i = 0; i < n; i++) {
+//                printf("%zu %zu\n", tem, i);
                 err[i] = quantizer.quantize_and_overwrite(data[i], predData[i]);
             }
+            ++tem;
         }
 
         /*
@@ -1321,22 +1340,29 @@ namespace SZ3 {
          */
 
         size_t getTPArrayAndEstimateSize(T *datax, T *datay, T *dataz, T *predDatax, T *predDatay, T *predDataz,
-                          size_t *errx, size_t *erry, size_t *errz, LinearQuantizer<T> &quantizer, size_t n) {
+                                         size_t *errx, size_t *erry, size_t *errz, LinearQuantizer<T> &quantizer,
+                                         size_t n) {
             getTPArray1D(datax, predDatax, errx, quantizer, n);
             getTPArray1D(datay, predDatay, erry, quantizer, n);
             getTPArray1D(dataz, predDataz, errz, quantizer, n);
 
             uchar *bytes = new uchar[std::max(n * 12, (size_t) 1 << 16)], *tail = bytes;
-            size_t *err = new size_t[n * 3];
-            memcpy(err, errx, n * sizeof(size_t));
-            memcpy(err + n, erry, n * sizeof(size_t));
-            memcpy(err + n + n, errz, n * sizeof(size_t));
+//            size_t *err = new size_t[n * 3];
+//            memcpy(err, errx, n * sizeof(size_t));
+//            memcpy(err + n, erry, n * sizeof(size_t));
+//            memcpy(err + n + n, errz, n * sizeof(size_t));
 
             static HuffmanEncoder<size_t> encoder;
 
-            encoder.preprocess_encode(err, 3 * n, 2 * quantizer.get_radius());
+            encoder.preprocess_encode(errx, n, quantizer.get_radius() * 2);
             encoder.save(tail);
-            encoder.encode(err, 3 * n, tail);
+            encoder.encode(errx, n, tail);
+            encoder.preprocess_encode(erry, n, quantizer.get_radius() * 2);
+            encoder.save(tail);
+            encoder.encode(erry, n, tail);
+            encoder.preprocess_encode(errz, n, quantizer.get_radius() * 2);
+            encoder.save(tail);
+            encoder.encode(errz, n, tail);
 
             quantizer.save(tail);
 
@@ -1344,6 +1370,87 @@ namespace SZ3 {
             delete[] lossless.compress(bytes, tail - bytes, cmpSize);
 
             return cmpSize;
+        }
+
+        size_t getTPArrayAndEstimateSizeOverwrite(T *datax, T *datay, T *dataz, T *predDatax, T *predDatay, T *predDataz,
+                                           size_t *errx, size_t *erry, size_t *errz, LinearQuantizer<T> &quantizer,
+                                           size_t n) {
+            getTPArray1DOverwrite(datax, predDatax, errx, quantizer, n);
+            getTPArray1DOverwrite(datay, predDatay, erry, quantizer, n);
+            getTPArray1DOverwrite(dataz, predDataz, errz, quantizer, n);
+
+            uchar *bytes = new uchar[std::max(n * 12, (size_t) 1 << 16)], *tail = bytes;
+//            size_t *err = new size_t[n * 3];
+//            memcpy(err, errx, n * sizeof(size_t));
+//            memcpy(err + n, erry, n * sizeof(size_t));
+//            memcpy(err + n + n, errz, n * sizeof(size_t));
+
+            static HuffmanEncoder<size_t> encoder;
+
+            encoder.preprocess_encode(errx, n, quantizer.get_radius() * 2);
+            encoder.save(tail);
+            encoder.encode(errx, n, tail);
+            encoder.preprocess_encode(erry, n, quantizer.get_radius() * 2);
+            encoder.save(tail);
+            encoder.encode(erry, n, tail);
+            encoder.preprocess_encode(errz, n, quantizer.get_radius() * 2);
+            encoder.save(tail);
+            encoder.encode(errz, n, tail);
+
+            quantizer.save(tail);
+
+            size_t cmpSize;
+            delete[] lossless.compress(bytes, tail - bytes, cmpSize);
+
+            return cmpSize;
+        }
+
+        size_t getTPEstimateSize(T *datax, T *datay, T *dataz, T *predDatax, T *predDatay, T *predDataz,
+                                 LinearQuantizer<T> &quantizer, size_t n) {
+            size_t *err = new size_t[3 * n], *errx = err, *erry = errx + n, *errz = erry + n;
+            uchar *bytes = new uchar[12 * n + (1 << 10)], *tail = bytes;
+
+            std::vector<T> unpred;
+            for (size_t i = 0; i < n; i++) {
+                errx[i] = quantizer.quantize(datax[i], predDatax[i]);
+                if (errx[i] == 0) unpred.push_back(datax[i]);
+            }
+            for (size_t i = 0; i < n; i++) {
+                erry[i] = quantizer.quantize(datay[i], predDatay[i]);
+                if (erry[i] == 0) unpred.push_back(datay[i]);
+            }
+            for (size_t i = 0; i < n; i++) {
+                errz[i] = quantizer.quantize(dataz[i], predDataz[i]);
+                if (errz[i] == 0) unpred.push_back(dataz[i]);
+            }
+            static HuffmanEncoder<size_t> encoder;
+            encoder.preprocess_encode(err, 3 * n, 0);
+            encoder.save(tail);
+            encoder.encode(err, 3 * n, tail);
+
+            delete[] err;
+
+            write(unpred, tail);
+
+            size_t cmpSize;
+            delete[] lossless.compress(bytes, tail - bytes, cmpSize);
+            delete[] bytes;
+
+            return cmpSize;
+        }
+
+        void getTPArrayAndOverwrite(T *datax, T *datay, T *dataz, T *predDatax, T *predDatay, T *predDataz,
+                                      size_t *errx, size_t *erry, size_t *errz, LinearQuantizer<T> &quantizer, size_t n) {
+            getTPArray1DOverwrite(datax, predDatax, errx, quantizer, n);
+            getTPArray1DOverwrite(datay, predDatay, erry, quantizer, n);
+            getTPArray1DOverwrite(dataz, predDataz, errz, quantizer, n);
+        }
+
+        void overwriteTPData(T *datax, T *datay, T *dataz, T *predDatax, T *predDatay, T *predDataz,
+                             LinearQuantizer<T> quantizer, size_t n) {
+            overwriteTPData1D(datax, predDatax, quantizer, n);
+            overwriteTPData1D(datay, predDatay, quantizer, n);
+            overwriteTPData1D(dataz, predDataz, quantizer, n);
         }
 
         /*
@@ -1356,7 +1463,7 @@ namespace SZ3 {
         uchar *compressTemporalPredictionOnSlice(const Config &conf, T *datax, T *datay, T *dataz,
                                                  size_t &compressed_size, size_t *ord, uchar blkflag,
                                                  size_t bx, size_t by, size_t bz, uchar *&bytes1,
-                                                 size_t &compressed_size1, size_t *ord1,
+                                                 size_t &compressed_size1, T *decmpdata1, size_t *ord1,
                                                  T fflag) {
 
             static const int64_t radius = (1 << 15);
@@ -1400,7 +1507,7 @@ namespace SZ3 {
             size_t *errz = new size_t[nt * n];
             size_t errlen = 0;
 
-            T *decmpdata1 = new T[n * 3];
+//            T *decmpdata1 = new T[n * 3];
             T *d1x = decmpdata1, *d1y = d1x + n, *d1z = d1y + n;
             size_t outSize;
 
@@ -1409,7 +1516,7 @@ namespace SZ3 {
             if (bytes1 == nullptr) {
 
 #if __batch_info
-                printf("[00]\e[34m\e[1mnew batch, t = %zu\n\e[0m", (size_t) 0);
+                printf("\e[34m\e[1mnew batch, t = %zu\n\e[0m", (size_t) 0);
 #endif
 
                 writeBytesByte(tailp, 0x00);
@@ -1428,7 +1535,7 @@ namespace SZ3 {
             } else {
 
                 const uchar *bytes1c = bytes1;
-                decompressSimpleBlocking(bytes1c, d1x, d1y, d1z, outSize, compressed_size1);
+//                decompressSimpleBlocking(bytes1c, d1x, d1y, d1z, outSize, compressed_size1);
 
 //                memcpy(pdx, datax, n * sizeof(T));
 //                memcpy(pdy, datay, n * sizeof(T));
@@ -1438,8 +1545,7 @@ namespace SZ3 {
                 for (size_t i = 0; i < n; i++) pdy[i] = datay[ord1[i]];
                 for (size_t i = 0; i < n; i++) pdz[i] = dataz[ord1[i]];
 
-                LinearQuantizer<T> temQuantizer(conf.absErrorBound, radius);
-                size_t cmpSizeT = getTPArrayAndEstimateSize(pdx, pdy, pdz, d1x, d1y, d1z, errx, erry, errz, temQuantizer, n);
+                size_t cmpSizeT = getTPEstimateSize(pdx, pdy, pdz, d1x, d1y, d1z, quantizer, n);
                 if (compressed_size1 < cmpSizeT) {
                     if (fflag > 1) {
                         fflag -= fflag_stride;
@@ -1458,14 +1564,17 @@ namespace SZ3 {
                     }
                     memcpy(ord1, p, n * sizeof(size_t));
                     const uchar *bytes1c = bytes1;
-                    decompressSimpleBlocking(bytes1c, pdx, pdy, pdz, outSize, compressed_size1);
+                    decompressSimpleBlocking(bytes1c, d1x, d1y, d1z, outSize, compressed_size1);
+                    memcpy(pdx, d1x, n * sizeof(T));
+                    memcpy(pdy, d1y, n * sizeof(T));
+                    memcpy(pdz, d1z, n * sizeof(T));
                 } else {
 #if __batch_info
-                    printf("[14]\e[32m\e[1mold batch, t = %zu\n\e[0m", (size_t) 0);
+                    printf("\e[32m\e[1mold batch, t = %zu\n\e[0m", (size_t) 0);
 #endif
                     writeBytesByte(tailp, 0x01);
+                    getTPArrayAndOverwrite(pdx, pdy, pdz, d1x, d1y, d1z, errx, erry, errz, quantizer, n);
                     errlen = n;
-                    quantizer.mergeUnpreds(temQuantizer);
                     if (ord != nullptr) {
                         memcpy(ord, ord1, n * sizeof(size_t));
                     }
@@ -1633,9 +1742,7 @@ namespace SZ3 {
                 for (size_t i = 0; i < n; i++) nowpy[i] = datay[t * n + p[i]];
                 for (size_t i = 0; i < n; i++) nowpz[i] = dataz[t * n + p[i]];
 
-                LinearQuantizer<T> temQuantizer(conf.absErrorBound, radius);
-                size_t cmpSizeT = getTPArrayAndEstimateSize(nowpx, nowpy, nowpz, prepx, prepy, prepz, errx + errlen,
-                                                            erry + errlen, errz + errlen, temQuantizer, n);
+                size_t cmpSizeT = getTPEstimateSize(nowpx, nowpy, nowpz, prepx, prepy, prepz, quantizer, n);
                 if (compressed_size < cmpSizeT) {
 //                if (true) {
 
@@ -1655,21 +1762,41 @@ namespace SZ3 {
                     write(compressed_size, tail);
                     write(bytes1, compressed_size, tail);
 
-                    decompressSimpleBlocking(bytes1, d1x, d1y, d1z, outSize, compressed_size);
+                    if (t + 1 < nt) {
+                        decompressSimpleBlocking(bytes1, nowpx, nowpy, nowpz, outSize, compressed_size);
+                    }
+
                     delete[] bytes1;
 
-                    if (t + 1 < nt) {
-                        memcpy(pdx + t * n, d1x, n * sizeof(T));
-                        memcpy(pdy + t * n, d1y, n * sizeof(T));
-                        memcpy(pdz + t * n, d1z, n * sizeof(T));
-                    }
                 } else {
 #if __batch_info
-                            printf("[14]\e[32m\e[1mold batch, t = %zu\n\e[0m", t);
+                    printf("\e[32m\e[1mold batch, t = %zu\n\e[0m", t);
 #endif
                     writeBytesByte(tailp, 0x01);
+                    getTPArrayAndOverwrite(nowpx, nowpy, nowpz, prepx, prepy, prepz, errx + errlen, erry + errlen,
+                                           errz + errlen, quantizer, n);
+//                    size_t *errpx = errx + errlen;
+//                    size_t *errpy = erry + errlen;
+//                    size_t *errpz = errz + errlen;
+//
+//                    for (size_t i = 0; i < n; i++) {
+//                        T &nowx = nowpx[i];
+//                        T &prex = prepx[i];
+//                        errpx[i] = quantizer.quantize_and_overwrite(nowx, prex);
+//                    }
+//                    for (size_t i = 0; i < n; i++) {
+//                        T &nowy = nowpy[i];
+//                        T &prey = prepy[i];
+//                        errpy[i] = quantizer.quantize_and_overwrite(nowy, prey);
+//                    }
+//                    for (size_t i = 0; i < n; i++) {
+//                        T &nowz = nowpz[i];
+//                        T &prez = prepz[i];
+//                        errpz[i] = quantizer.quantize_and_overwrite(nowz, prez);
+//                    }
+
+
                     errlen += n;
-                    quantizer.mergeUnpreds(temQuantizer);
                 }
 
 
@@ -1835,7 +1962,7 @@ namespace SZ3 {
 
             quantizer.save(tail);
 
-            delete[] decmpdata1;
+//            delete[] decmpdata1;
             delete[] p;
 //            delete[] temp;
             delete[] pdx;
@@ -1961,6 +2088,7 @@ namespace SZ3 {
             confSlice.absErrorBound = conf.absErrorBound;
 
             uchar *bytes1 = nullptr;
+            T *decmpdata1 = new T[3 * n];
             size_t compressed_size1 = 0;
             size_t *ord1 = new size_t[n];
             int cnt1 = -1;
@@ -1970,14 +2098,15 @@ namespace SZ3 {
             } else if (fflag > 1) {
                 double l = 1, r = 24, midl, midr;
                 size_t size_midl, size_midr;
-                Config confSliceTest = Config(std::min(std::min(bt * 4, n > (1 << 20) ? (size_t) 16 : (size_t) 64), nt), n);
+                Config confSliceTest = Config(std::min(std::min(bt * 4, n > (1 << 20) ? (size_t) 16 : (size_t) 64), nt),
+                                              n);
                 confSliceTest.absErrorBound = conf.absErrorBound;
-                while(r - l > 1){
+                while (r - l > 1) {
                     midl = (l + l + r) / 3.;
                     midr = (l + r + r) / 3.;
 
                     compressTemporalPredictionOnSlice(confSliceTest, datax, datay, dataz, size_midl, nullptr,
-                                                      blkflag, bx, by, bz, bytes1, compressed_size1, ord1, midl);
+                                                      blkflag, bx, by, bz, bytes1, compressed_size1, decmpdata1, ord1, midl);
                     delete[] bytes1;
                     bytes1 = nullptr;
                     compressed_size1 = 0;
@@ -1986,7 +2115,7 @@ namespace SZ3 {
 //                    isTpCacheBatch.init();
 
                     compressTemporalPredictionOnSlice(confSliceTest, datax, datay, dataz, size_midr, nullptr,
-                                                      blkflag, bx, by, bz, bytes1, compressed_size1, ord1, midr);
+                                                      blkflag, bx, by, bz, bytes1, compressed_size1, decmpdata1, ord1, midr);
                     delete[] bytes1;
                     bytes1 = nullptr;
                     compressed_size1 = 0;
@@ -1995,10 +2124,9 @@ namespace SZ3 {
 //                    isTpCacheBatch.init();
 //                    printf("l:[%.2f, %zu], r:[%.2f, %zu]\n", midl, size_midl, midr, size_midr);
 
-                    if (size_midl < size_midr){
+                    if (size_midl < size_midr) {
                         r = midr;
-                    }
-                    else{
+                    } else {
                         l = midl;
                     }
                 }
@@ -2027,7 +2155,7 @@ namespace SZ3 {
                                                                                                  l *
                                                                                                  n,
                                                                       blkflag, bx, by, bz, bytes1,
-                                                                      compressed_size1, ord1, fflag);
+                                                                      compressed_size1, decmpdata1, ord1, fflag);
 
 //                uchar *sliceBytes = compressTemporalPredictionOnSliceIntegers(confSlice, datax + l * n,
 //                                                                      datay + l * n, dataz + l * n,
@@ -2069,6 +2197,8 @@ namespace SZ3 {
 
                 delete[] sliceBytes;
             }
+
+            delete[] decmpdata1;
 
             write(cnt1 + 1, bytes1s);
             bytes1s -= sizeof(cnt1);
@@ -2289,27 +2419,24 @@ namespace SZ3 {
             }
 
 #if !__soft_eb
-            for (size_t it : unx) {
+            for (size_t it: unx) {
                 if (it & 1) {
                     datax[it >> 1] -= conf.absErrorBound;
-                }
-                else {
+                } else {
                     datax[it >> 1] += conf.absErrorBound;
                 }
             }
-            for (size_t it : uny) {
+            for (size_t it: uny) {
                 if (it & 1) {
                     datay[it >> 1] -= conf.absErrorBound;
-                }
-                else {
+                } else {
                     datay[it >> 1] += conf.absErrorBound;
                 }
             }
-            for (size_t it : unz) {
+            for (size_t it: unz) {
                 if (it & 1) {
                     dataz[it >> 1] -= conf.absErrorBound;
-                }
-                else {
+                } else {
                     dataz[it >> 1] += conf.absErrorBound;
                 }
             }

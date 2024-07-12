@@ -89,6 +89,21 @@ namespace SZ3 {
             }
         }
 
+        void overwrite(T &data, T pred) {
+            T diff = data - pred;
+            int quant_index = (int) (fabs(diff) * this->error_bound_reciprocal) + 1;
+            if (quant_index < this->radius * 2) {
+                quant_index &= -2;
+                if (diff < 0) {
+                    quant_index = -quant_index;
+                }
+                T decompressed_data = pred + quant_index * this->error_bound;
+                if (fabs(decompressed_data - data) <= this->error_bound) {
+                    data = decompressed_data;
+                }
+            }
+        }
+
         int quantize_and_overwrite(T ori, T pred, T &dest) {
             T diff = ori - pred;
             int quant_index = (int) (fabs(diff) * this->error_bound_reciprocal) + 1;
@@ -186,6 +201,10 @@ namespace SZ3 {
 
         size_t numUnpred(){
             return unpred.size();
+        }
+
+        void insertUnpred(T data) {
+            unpred.push_back(data);
         }
 
         void mergeUnpreds(LinearQuantizer<T> &b) {
