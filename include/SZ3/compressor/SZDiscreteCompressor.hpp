@@ -1239,76 +1239,82 @@ namespace SZ3 {
             memcpy(data, a, n * sizeof(T));
         }
 
-//        class IsTPCache {
-//        public:
-//            void init() {
-//                isTP = 0;
-//                cnts = 0;
-//                limit = 1;
-//                sizeTP = numTP = 0;
-//            }
-//
-//            uchar read() {
-////                return 0x00;
-//                /*
-//                 * 0x00 test both LCP-S and TP
-//                 * 0x01 do LCP-S
-//                 * 0x02 do TP
-//                 */
-//                if (isTP == 1) {
-//                    return 0x02;
-//                }
-//                if (cnts == 0) {
-//                    return 0x00;
-//                }
-//                --cnts;
-//                printf("cnts = %zu\n", cnts);
-//                return 0x01;
-//            }
-//
-//            void writeS() {
-//                isTP = 0;
-//                // maximum = 256
-//                cnts = limit >> 1;
-//                if (limit < (1 << 9))  limit <<= 1;
-//            }
-//
-//            void writeT() {
-//                isTP = 1;
-//                cnts = 0;
-//                limit = 1;
-//            }
-//
-//            uchar writeTSizeFirst(size_t _) {
-//                printf("%zu %.2f %zu %zu\n", _, 1.2 * sizeTP / numTP, sizeTP, numTP);
-//                if (_ > 2 * sizeTP / numTP) {
-//                    return 0x01;
-//                }
-//                return 0x00;
-//            }
-//
-//            void writeTSizeSecond(size_t _, uchar success) {
-//                // if T is indeed worse
-//                if (success == 0x01) {
-//                    isTP = 0;
-//                    cnts = 0;
-//                    limit = 1;
-//                } else {
-//                    sizeTP += _;
-//                    ++numTP;
-//                }
-//            }
-//
-////        private:
-//        public:
-//            size_t isTP;
-//            size_t cnts;
-//            size_t limit;
-//            size_t sizeTP, numTP;
-//
-//        };
+        class IsTPCache {
+        public:
+            IsTPCache(){
+                init();
+            }
 
-//        IsTPCache isTpCacheFirst, isTpCacheBatch;
+            void init() {
+                isTP = 0;
+                cnts = 0;
+                limit = 1;
+                sizeTP = numTP = 0;
+            }
+
+            uchar read() {
+//                return 0x00;
+                /*
+                 * 0x00 test both LCP-S and TP
+                 * 0x01 do LCP-S
+                 * 0x02 do TP
+                 */
+                if (isTP == 1) {
+                    return 0x00;
+                }
+                if (cnts == 0) {
+                    return 0x00;
+                }
+                --cnts;
+                return 0x01;
+            }
+
+            void writeS() {
+                isTP = 0;
+                // maximum = 8
+                // maximum = 258
+                cnts = limit >> 1;
+//                cnts = std::max(cnts, (size_t) 8);
+                if (limit < (1 << 4))  limit <<= 1;
+//                if (limit < (1 << 9))  limit <<= 1;
+            }
+
+            void writeT() {
+                isTP = 0;
+                cnts = 0;
+                limit = 1;
+            }
+
+            uchar writeTSizeFirst(size_t _) {
+                printf("%zu %.2f %zu %zu\n", _, 1.2 * sizeTP / numTP, sizeTP, numTP);
+                if (_ > 2 * sizeTP / numTP) {
+                    return 0x01;
+                }
+                return 0x00;
+            }
+
+            void writeTSizeSecond(size_t _, uchar success) {
+                // if T is indeed worse
+                if (success == 0x01) {
+                    isTP = 0;
+                    cnts = 0;
+                    limit = 1;
+                } else {
+                    sizeTP += _;
+                    ++numTP;
+                }
+            }
+
+//        private:
+        public:
+            size_t isTP;
+            size_t cnts;
+            size_t limit;
+            size_t sizeTP, numTP;
+
+        };
+
+        IsTPCache isTpCacheFirst, isTpCacheBatch;
 
         void getTPArray1D(T *data, T *predData, size_t *err, LinearQuantizer<T> &quantizer, size_t n) {
             for (size_t i = 0; i < n; i++) {
@@ -1325,14 +1331,10 @@ namespace SZ3 {
             }
         }
 
-        size_t tem = 0;
-
         void getTPArray1DOverwrite(T *data, T *predData, size_t *err, LinearQuantizer<T> &quantizer, size_t n) {
             for (size_t i = 0; i < n; i++) {
-//                printf("%zu %zu\n", tem, i);
                 err[i] = quantizer.quantize_and_overwrite(data[i], predData[i]);
             }
-            ++tem;
         }
 
         /*
@@ -1372,6 +1374,8 @@ namespace SZ3 {
             return cmpSize;
         }
 
+        double est_time_encode;
+
         size_t getTPArrayAndEstimateSizeOverwrite(T *datax, T *datay, T *dataz, T *predDatax, T *predDatay, T *predDataz,
                                            size_t *errx, size_t *erry, size_t *errz, LinearQuantizer<T> &quantizer,
                                            size_t n) {
@@ -1384,6 +1388,9 @@ namespace SZ3 {
 //            memcpy(err, errx, n * sizeof(size_t));
 //            memcpy(err + n, erry, n * sizeof(size_t));
 //            memcpy(err + n + n, errz, n * sizeof(size_t));
+
+            Timer timer;
+            timer.start();
 
             static HuffmanEncoder<size_t> encoder;
 
@@ -1401,6 +1408,8 @@ namespace SZ3 {
 
             size_t cmpSize;
             delete[] lossless.compress(bytes, tail - bytes, cmpSize);
+
+            est_time_encode = timer.stop();
 
             return cmpSize;
         }
@@ -1460,15 +1469,23 @@ namespace SZ3 {
         * after decompress, datax, datay, dataz will not increase
         */
 
+        Timer timer;
+        bool est_lock = true;
+        double est_time_s, est_time_t;
+        double est_time = 0;
+
         uchar *compressTemporalPredictionOnSlice(const Config &conf, T *datax, T *datay, T *dataz,
                                                  size_t &compressed_size, size_t *ord, uchar blkflag,
                                                  size_t bx, size_t by, size_t bz, uchar *&bytes1,
                                                  size_t &compressed_size1, T *decmpdata1, size_t *ord1,
                                                  T fflag) {
 
+
+
             static const int64_t radius = (1 << 15);
 
             LinearQuantizer<T> quantizer(conf.absErrorBound, radius);
+            LinearQuantizer<T> temQuantizer(conf.absErrorBound, radius);
 
             size_t nt = conf.dims[0];
             size_t n = conf.dims[1];
@@ -1499,12 +1516,12 @@ namespace SZ3 {
 //            decompressSimpleBlocking(bytes1, d1x, d1y, d1z, outSize, compressed_size);
 //            delete[] bytes1;
 
-            T *pdx = new T[nt * n];
-            T *pdy = new T[nt * n];
-            T *pdz = new T[nt * n];
-            size_t *errx = new size_t[nt * n];
-            size_t *erry = new size_t[nt * n];
-            size_t *errz = new size_t[nt * n];
+            T *pda = new T[3 * nt * n];
+            T *pdx = pda, *pdy = pdx + nt * n, *pdz = pdy + nt * n;
+            T *nxa = new T[3 * n];
+            T *nxx = nxa, *nxy = nxx + n, *nxz = nxy + n;
+            size_t *erra = new size_t[3 * nt * n];
+            size_t *errx = erra, *erry = errx + nt * n, *errz = erry + nt * n;
             size_t errlen = 0;
 
 //            T *decmpdata1 = new T[n * 3];
@@ -1545,108 +1562,133 @@ namespace SZ3 {
                 for (size_t i = 0; i < n; i++) pdy[i] = datay[ord1[i]];
                 for (size_t i = 0; i < n; i++) pdz[i] = dataz[ord1[i]];
 
-                size_t cmpSizeT = getTPEstimateSize(pdx, pdy, pdz, d1x, d1y, d1z, quantizer, n);
-                if (compressed_size1 < cmpSizeT) {
-                    if (fflag > 1) {
-                        fflag -= fflag_stride;
-                        if (fflag < 1) fflag = 1;
-                        conf1.absErrorBound = conf.absErrorBound / fflag;
-                    }
-#if __batch_info
-                    printf("\e[34m\e[1mnew batch, t = %zu\n\e[0m", (size_t) 0);
-#endif
-                    writeBytesByte(tailp, 0x00);
-
-                    bytes1 = compressSimpleBlocking(conf1, datax, datay, dataz, compressed_size1, p, blkflag, bx, by,
-                                                    bz);
-                    if (ord != nullptr) {
-                        memcpy(ord, p, n * sizeof(size_t));
-                    }
-                    memcpy(ord1, p, n * sizeof(size_t));
-                    const uchar *bytes1c = bytes1;
-                    decompressSimpleBlocking(bytes1c, d1x, d1y, d1z, outSize, compressed_size1);
-                    memcpy(pdx, d1x, n * sizeof(T));
-                    memcpy(pdy, d1y, n * sizeof(T));
-                    memcpy(pdz, d1z, n * sizeof(T));
-                } else {
-#if __batch_info
-                    printf("\e[32m\e[1mold batch, t = %zu\n\e[0m", (size_t) 0);
-#endif
-                    writeBytesByte(tailp, 0x01);
-                    getTPArrayAndOverwrite(pdx, pdy, pdz, d1x, d1y, d1z, errx, erry, errz, quantizer, n);
-                    errlen = n;
-                    if (ord != nullptr) {
-                        memcpy(ord, ord1, n * sizeof(size_t));
-                    }
-                    memcpy(p, ord1, n * sizeof(size_t));
-                }
-
-//                switch (isTpCacheFirst.read()) {
-//                    case 0x00 : {
-//                        size_t cmpSizeS = 0, cmpSizeT = 0;
-//                        uchar *bytesv1 = compressSimpleBlocking(conf1, datax, datay, dataz, cmpSizeS, temp, blkflag, bx,
-//                                                                by, bz);
-//                        LinearQuantizer<T> temQuantizer(conf.absErrorBound, radius);
-//                        cmpSizeT = getTPArrayAndEstimateSize(pdx, pdy, pdz, d1x, d1y, d1z, errx, erry, errz,
-//                                                             temQuantizer, n);
-//
-//                        if (cmpSizeS < cmpSizeT) {
-//#if __batch_info
-//                            printf("[01]\e[34m\e[1mnew batch, t = %zu\n\e[0m", (size_t) 0);
-//#endif
-//                            isTpCacheFirst.writeS();
-//                            writeBytesByte(tailp, 0x00);
-//                            bytes1 = bytesv1;
-//                            if (fflag > 1) {
-//                                fflag -= fflag_stride;
-//                                if (fflag < 1) fflag = 1;
-//                                conf1.absErrorBound = conf.absErrorBound / fflag;
-//                            }
-//                            memcpy(p, temp, n * sizeof(size_t));
-//                            if (ord != nullptr) {
-//                                memcpy(ord, p, n * sizeof(size_t));
-//                            }
-//                            memcpy(ord1, p, n * sizeof(size_t));
-//                            const uchar *bytes1c = bytes1;
-//                            compressed_size1 = cmpSizeS;
-//                            decompressSimpleBlocking(bytes1c, pdx, pdy, pdz, outSize, compressed_size1);
-//                        } else {
-//                            isTpCacheFirst.writeTSizeSecond(cmpSizeT, 0x00);
-//#if __batch_info
-//                            printf("[02]\e[32m\e[1mold batch, t = %zu\n\e[0m", (size_t) 0);
-//#endif
-//                            isTpCacheFirst.writeT();
-//                            writeBytesByte(tailp, 0x01);
-//                            delete[] bytesv1;
-//                            quantizer.mergeUnpreds(temQuantizer);
-//                            errlen = n;
-//                            if (ord != nullptr) {
-//                                memcpy(ord, ord1, n * sizeof(size_t));
-//                            }
-//                            memcpy(p, ord1, n * sizeof(size_t));
-//                        }
-//                        break;
+//                size_t cmpSizeT = getTPEstimateSize(pdx, pdy, pdz, d1x, d1y, d1z, quantizer, n);
+//                if (compressed_size1 < cmpSizeT) {
+//                    if (fflag > 1) {
+//                        fflag -= fflag_stride;
+//                        if (fflag < 1) fflag = 1;
+//                        conf1.absErrorBound = conf.absErrorBound / fflag;
 //                    }
-//                    case 0x01 : {
-//                        if (fflag > 1) {
-//                            fflag -= fflag_stride;
-//                            if (fflag < 1) fflag = 1;
-//                            conf1.absErrorBound = conf.absErrorBound / fflag;
-//                        }
 //#if __batch_info
-//                        printf("[03]\e[34m\e[1mnew batch, t = %zu\n\e[0m", (size_t) 0);
+//                    printf("\e[34m\e[1mnew batch, t = %zu\n\e[0m", (size_t) 0);
 //#endif
-//                        writeBytesByte(tailp, 0x00);
+//                    writeBytesByte(tailp, 0x00);
 //
-//                        bytes1 = compressSimpleBlocking(conf1, datax, datay, dataz, compressed_size1, p, blkflag, bx, by, bz);
-//                        if (ord != nullptr) {
-//                            memcpy(ord, p, n * sizeof(size_t));
-//                        }
-//                        memcpy(ord1, p, n * sizeof(size_t));
-//                        const uchar *bytes1c = bytes1;
-//                        decompressSimpleBlocking(bytes1c, pdx, pdy, pdz, outSize, compressed_size1);
-//                        break;
+//                    bytes1 = compressSimpleBlocking(conf1, datax, datay, dataz, compressed_size1, p, blkflag, bx, by,
+//                                                    bz);
+//                    if (ord != nullptr) {
+//                        memcpy(ord, p, n * sizeof(size_t));
 //                    }
+//                    memcpy(ord1, p, n * sizeof(size_t));
+//                    const uchar *bytes1c = bytes1;
+//                    decompressSimpleBlocking(bytes1c, d1x, d1y, d1z, outSize, compressed_size1);
+//                    memcpy(pdx, d1x, n * sizeof(T));
+//                    memcpy(pdy, d1y, n * sizeof(T));
+//                    memcpy(pdz, d1z, n * sizeof(T));
+//                } else {
+//#if __batch_info
+//                    printf("\e[32m\e[1mold batch, t = %zu\n\e[0m", (size_t) 0);
+//#endif
+//                    writeBytesByte(tailp, 0x01);
+//                    getTPArrayAndOverwrite(pdx, pdy, pdz, d1x, d1y, d1z, errx, erry, errz, quantizer, n);
+//                    errlen = n;
+//                    if (ord != nullptr) {
+//                        memcpy(ord, ord1, n * sizeof(size_t));
+//                    }
+//                    memcpy(p, ord1, n * sizeof(size_t));
+//                }
+
+                switch (isTpCacheFirst.read()) {
+                    case 0x00 : {
+                        size_t cmpSizeS = 0, cmpSizeT = 0;
+                        timer.start();
+                        uchar *bytesv1 = nullptr;
+                        est_time_s = timer.stop();
+                        timer.start();
+                        memcpy(nxx, pdx, n * sizeof(T));
+                        memcpy(nxy, pdy, n * sizeof(T));
+                        memcpy(nxz, pdz, n * sizeof(T));
+                        temQuantizer.clear();
+                        cmpSizeT = getTPArrayAndEstimateSizeOverwrite(nxx, nxy, nxz, d1x, d1y, d1z, errx, erry, errz, temQuantizer, n);
+//                        cmpSizeT = getTPEstimateSize(pdx, pdy, pdz, d1x, d1y, d1z, temQuantizer, n);
+                        est_time_t = timer.stop();
+
+                        if (compressed_size1 < cmpSizeT) {
+                            bytesv1 = compressSimpleBlocking(conf1, datax, datay, dataz, cmpSizeS, p, blkflag, bx,
+                                                   by, bz);
+                            compressed_size1 = cmpSizeS;
+                            if(!est_lock) est_time += est_time_t;
+#if __batch_info
+                            printf("[01]\e[34m\e[1mnew batch, t = %zu\n\e[0m", (size_t) 0);
+#endif
+                            isTpCacheFirst.writeS();
+                            writeBytesByte(tailp, 0x00);
+                            bytes1 = bytesv1;
+                            if (fflag > 1) {
+                                fflag -= fflag_stride;
+                                if (fflag < 1) fflag = 1;
+                                conf1.absErrorBound = conf.absErrorBound / fflag;
+                            }
+                            if (ord != nullptr) {
+                                memcpy(ord, p, n * sizeof(size_t));
+                            }
+                            memcpy(ord1, p, n * sizeof(size_t));
+                            const uchar *bytes1c = bytes1;
+                            decompressSimpleBlocking(bytes1c, d1x, d1y, d1z, outSize, compressed_size1);
+                            memcpy(pdx, d1x, n * sizeof(T));
+                            memcpy(pdy, d1y, n * sizeof(T));
+                            memcpy(pdz, d1z, n * sizeof(T));
+                        } else {
+                            if(!est_lock) est_time += est_time_s;
+                            isTpCacheFirst.writeTSizeSecond(cmpSizeT, 0x00);
+#if __batch_info
+                            printf("[02]\e[32m\e[1mold batch, t = %zu\n\e[0m", (size_t) 0);
+#endif
+                            isTpCacheFirst.writeT();
+                            writeBytesByte(tailp, 0x01);
+
+                            timer.start();
+
+                            memcpy(pdx, nxx, n * sizeof(T));
+                            memcpy(pdy, nxy, n * sizeof(T));
+                            memcpy(pdz, nxz, n * sizeof(T));
+
+                            quantizer.mergeUnpreds(temQuantizer);
+                            if(!est_lock) est_time += timer.stop();
+                            if(!est_lock) est_time += est_time_encode;
+//                            getTPArrayAndOverwrite(pdx, pdy, pdz, d1x, d1y, d1z, errx, erry, errz, quantizer, n);
+                            errlen = n;
+
+                            if (ord != nullptr) {
+                                memcpy(ord, ord1, n * sizeof(size_t));
+                            }
+                            memcpy(p, ord1, n * sizeof(size_t));
+                        }
+                        break;
+                    }
+                    case 0x01 : {
+                        if (fflag > 1) {
+                            fflag -= fflag_stride;
+                            if (fflag < 1) fflag = 1;
+                            conf1.absErrorBound = conf.absErrorBound / fflag;
+                        }
+#if __batch_info
+                        printf("[03]\e[34m\e[1mnew batch, t = %zu\n\e[0m", (size_t) 0);
+#endif
+                        writeBytesByte(tailp, 0x00);
+
+                        bytes1 = compressSimpleBlocking(conf1, datax, datay, dataz, compressed_size1, p, blkflag, bx, by, bz);
+                        if (ord != nullptr) {
+                            memcpy(ord, p, n * sizeof(size_t));
+                        }
+                        memcpy(ord1, p, n * sizeof(size_t));
+                        const uchar *bytes1c = bytes1;
+                        decompressSimpleBlocking(bytes1c, d1x, d1y, d1z, outSize, compressed_size1);
+                        memcpy(pdx, d1x, n * sizeof(T));
+                        memcpy(pdy, d1y, n * sizeof(T));
+                        memcpy(pdz, d1z, n * sizeof(T));
+                        break;
+                    }
 //                    case 0x02 : {
 //                        size_t cmpSizeT = 0;
 //                        LinearQuantizer<T> temQuantizer(conf.absErrorBound, radius);
@@ -1705,11 +1747,11 @@ namespace SZ3 {
 //
 //                        break;
 //                    }
-//                    default: {
-//                        perror("Abnormal return value of isTPCache.\n");
-//                        exit(-1);
-//                    }
-//                }
+                    default: {
+                        perror("Abnormal return value of isTPCache.\n");
+                        exit(-1);
+                    }
+                }
             }
 
             compressed_size = compressed_size1;
@@ -1743,137 +1785,146 @@ namespace SZ3 {
                 for (size_t i = 0; i < n; i++) nowpz[i] = dataz[t * n + p[i]];
 
                 size_t cmpSizeT = getTPEstimateSize(nowpx, nowpy, nowpz, prepx, prepy, prepz, quantizer, n);
-                if (compressed_size < cmpSizeT) {
-//                if (true) {
-
-                    if (fflag > 1) {
-                        fflag -= fflag_stride;
-                        if (fflag < 1) fflag = 1;
-                        if (nt - t <= 2) fflag = 1;
-                        conf1.absErrorBound = conf.absErrorBound / fflag;
-                    }
-#if __batch_info
-                    printf("\e[34m\e[1mnew batch, t = %zu\n\e[0m", t);
-#endif
-                    writeBytesByte(tailp, 0x00);
-
-                    const uchar *bytes1 = compressSimpleBlocking(conf1, datax + t * n, datay + t * n, dataz + t * n,
-                                                                 compressed_size, p, blkflag, bx, by, bz);
-                    write(compressed_size, tail);
-                    write(bytes1, compressed_size, tail);
-
-                    if (t + 1 < nt) {
-                        decompressSimpleBlocking(bytes1, nowpx, nowpy, nowpz, outSize, compressed_size);
-                    }
-
-                    delete[] bytes1;
-
-                } else {
-#if __batch_info
-                    printf("\e[32m\e[1mold batch, t = %zu\n\e[0m", t);
-#endif
-                    writeBytesByte(tailp, 0x01);
-                    getTPArrayAndOverwrite(nowpx, nowpy, nowpz, prepx, prepy, prepz, errx + errlen, erry + errlen,
-                                           errz + errlen, quantizer, n);
-//                    size_t *errpx = errx + errlen;
-//                    size_t *errpy = erry + errlen;
-//                    size_t *errpz = errz + errlen;
+//                if (compressed_size < cmpSizeT) {
+////                if (true) {
 //
-//                    for (size_t i = 0; i < n; i++) {
-//                        T &nowx = nowpx[i];
-//                        T &prex = prepx[i];
-//                        errpx[i] = quantizer.quantize_and_overwrite(nowx, prex);
+//                    if (fflag > 1) {
+//                        fflag -= fflag_stride;
+//                        if (fflag < 1) fflag = 1;
+//                        if (nt - t <= 2) fflag = 1;
+//                        conf1.absErrorBound = conf.absErrorBound / fflag;
 //                    }
-//                    for (size_t i = 0; i < n; i++) {
-//                        T &nowy = nowpy[i];
-//                        T &prey = prepy[i];
-//                        errpy[i] = quantizer.quantize_and_overwrite(nowy, prey);
-//                    }
-//                    for (size_t i = 0; i < n; i++) {
-//                        T &nowz = nowpz[i];
-//                        T &prez = prepz[i];
-//                        errpz[i] = quantizer.quantize_and_overwrite(nowz, prez);
-//                    }
-
-
-                    errlen += n;
-                }
-
-
-//                switch (isTpCacheBatch.read()) {
-//                    case 0x00 : {
-//                        size_t cmpSizeS = 0, cmpSizeT = 0;
-//                        uchar *bytesv1 = compressSimpleBlocking(conf1, datax + t * n, datay + t * n, dataz + t * n,
-//                                                                cmpSizeS, temp, blkflag, bx, by, bz);
-//                        LinearQuantizer<T> temQuantizer(conf.absErrorBound, radius);
-//                        cmpSizeT = getTPArrayAndEstimateSize(nowpx, nowpy, nowpz, prepx, prepy, prepz, errx + errlen,
-//                                                             erry + errlen, errz + errlen, temQuantizer, n);
-//                        printf("%zu %zu\n", cmpSizeS, cmpSizeT);
-//                        if (cmpSizeS < cmpSizeT) {
 //#if __batch_info
-//                            printf("[11]\e[34m\e[1mnew batch, t = %zu\n\e[0m", t);
+//                    printf("\e[34m\e[1mnew batch, t = %zu\n\e[0m", t);
 //#endif
-//                            isTpCacheBatch.writeS();
-//                            if (fflag > 1) {
-//                                fflag -= fflag_stride;
-//                                if (fflag < 1) fflag = 1;
-//                                if (nt - t <= 2) fflag = 1;
-//                                conf1.absErrorBound = conf.absErrorBound / fflag;
-//                            }
-//                            writeBytesByte(tailp, 0x00);
-//                            write(cmpSizeS, tail);
-//                            write(bytesv1, cmpSizeS, tail);
-//                            memcpy(p, temp, n * sizeof(size_t));
-//                            const uchar *bytesv1c = bytesv1;
-//                            decompressSimpleBlocking(bytesv1c, d1x, d1y, d1z, outSize, cmpSizeS);
-//                            if (t + 1 < nt) {
-//                                memcpy(pdx + t * n, d1x, n * sizeof(T));
-//                                memcpy(pdy + t * n, d1y, n * sizeof(T));
-//                                memcpy(pdz + t * n, d1z, n * sizeof(T));
-//                            }
-//                        } else {
-//                            isTpCacheBatch.writeTSizeSecond(cmpSizeT, 0x00);
-//#if __batch_info
-//                            printf("[12]\e[32m\e[1mold batch, t = %zu\n\e[0m", t);
-//#endif
-//                            isTpCacheBatch.writeT();
-//                            writeBytesByte(tailp, 0x01);
-//                            quantizer.mergeUnpreds(temQuantizer);
-//                            errlen += n;
-//                        }
-//                        delete[] bytesv1;
-//                        break;
+//                    writeBytesByte(tailp, 0x00);
+//
+//                    const uchar *bytes1 = compressSimpleBlocking(conf1, datax + t * n, datay + t * n, dataz + t * n,
+//                                                                 compressed_size, p, blkflag, bx, by, bz);
+//                    write(compressed_size, tail);
+//                    write(bytes1, compressed_size, tail);
+//
+//                    if (t + 1 < nt) {
+//                        decompressSimpleBlocking(bytes1, nowpx, nowpy, nowpz, outSize, compressed_size);
 //                    }
-//                    case 0x01 : {
-//                        size_t cmpSizeS = 0;
-//                        if (isTpCacheBatch.cnts == 0) {
-//                            fflag = 5;
-//                            conf1.absErrorBound = conf.absErrorBound / fflag;
-//                        }
-//                        uchar *bytesv1 = compressSimpleBlocking(conf1, datax + t * n, datay + t * n, dataz + t * n,
-//                                                                cmpSizeS, p, blkflag, bx, by, bz);
+//
+//                    delete[] bytes1;
+//
+//                } else {
 //#if __batch_info
-//                        printf("[13]\e[34m\e[1mnew batch, t = %zu\n\e[0m", t);
+//                    printf("\e[32m\e[1mold batch, t = %zu\n\e[0m", t);
 //#endif
-//                        if (fflag > 1) {
-//                            fflag -= fflag_stride;
-//                            if (fflag < 1) fflag = 1;
-//                            if (nt - t <= 2) fflag = 1;
-//                            conf1.absErrorBound = conf.absErrorBound / fflag;
-//                        }
-//                        writeBytesByte(tailp, 0x00);
-//                        write(cmpSizeS, tail);
-//                        write(bytesv1, cmpSizeS, tail);
-//                        const uchar *bytesv1c = bytesv1;
-//                        decompressSimpleBlocking(bytesv1c, d1x, d1y, d1z, outSize, cmpSizeS);
-//                        delete[] bytesv1;
-//                        if (t + 1 < nt) {
-//                            memcpy(pdx + t * n, d1x, n * sizeof(T));
-//                            memcpy(pdy + t * n, d1y, n * sizeof(T));
-//                            memcpy(pdz + t * n, d1z, n * sizeof(T));
-//                        }
-//                        break;
-//                    }
+//                    writeBytesByte(tailp, 0x01);
+//                    getTPArrayAndOverwrite(nowpx, nowpy, nowpz, prepx, prepy, prepz, errx + errlen, erry + errlen,
+//                                           errz + errlen, quantizer, n);
+////                    size_t *errpx = errx + errlen;
+////                    size_t *errpy = erry + errlen;
+////                    size_t *errpz = errz + errlen;
+////
+////                    for (size_t i = 0; i < n; i++) {
+////                        T &nowx = nowpx[i];
+////                        T &prex = prepx[i];
+////                        errpx[i] = quantizer.quantize_and_overwrite(nowx, prex);
+////                    }
+////                    for (size_t i = 0; i < n; i++) {
+////                        T &nowy = nowpy[i];
+////                        T &prey = prepy[i];
+////                        errpy[i] = quantizer.quantize_and_overwrite(nowy, prey);
+////                    }
+////                    for (size_t i = 0; i < n; i++) {
+////                        T &nowz = nowpz[i];
+////                        T &prez = prepz[i];
+////                        errpz[i] = quantizer.quantize_and_overwrite(nowz, prez);
+////                    }
+//
+//
+//                    errlen += n;
+//                }
+
+
+                switch (isTpCacheBatch.read()) {
+                    case 0x00 : {
+                        size_t cmpSizeS = 0, cmpSizeT = 0;
+                        timer.start();
+                        uchar *bytesv1 = nullptr;
+                        est_time_s = timer.stop();
+                        timer.start();
+                        memcpy(nxx, nowpx, n * sizeof(T));
+                        memcpy(nxy, nowpy, n * sizeof(T));
+                        memcpy(nxz, nowpz, n * sizeof(T));
+                        temQuantizer.clear();
+                        cmpSizeT = getTPArrayAndEstimateSizeOverwrite(nxx, nxy, nxz, prepx, prepy, prepz,
+                                                                      errx + errlen, erry + errlen, errz + errlen,
+                                                                      temQuantizer, n);
+//                        cmpSizeT = getTPEstimateSize(nowpx, nowpy, nowpz, prepx, prepy, prepz, temQuantizer, n);
+                        est_time_t = timer.stop();
+                        if (compressed_size < cmpSizeT) {
+                            bytesv1 = compressSimpleBlocking(conf1, datax + t * n, datay + t * n, dataz + t * n,
+                                                     cmpSizeS, p, blkflag, bx, by, bz);
+                            compressed_size = cmpSizeS;
+                            if(!est_lock) est_time += est_time_t;
+#if __batch_info
+                            printf("[11]\e[34m\e[1mnew batch, t = %zu\n\e[0m", t);
+#endif
+                            isTpCacheBatch.writeS();
+                            if (fflag > 1) {
+                                fflag -= fflag_stride;
+                                if (fflag < 1) fflag = 1;
+                                if (nt - t <= 2) fflag = 1;
+                                conf1.absErrorBound = conf.absErrorBound / fflag;
+                            }
+                            writeBytesByte(tailp, 0x00);
+                            write(cmpSizeS, tail);
+                            write(bytesv1, cmpSizeS, tail);
+                            const uchar *bytesv1c = bytesv1;
+                            decompressSimpleBlocking(bytesv1c, nowpx, nowpy, nowpz, outSize, cmpSizeS);
+                        } else {
+                            if(!est_lock) est_time += est_time_s;
+                            isTpCacheBatch.writeTSizeSecond(cmpSizeT, 0x00);
+#if __batch_info
+                            printf("[12]\e[32m\e[1mold batch, t = %zu\n\e[0m", t);
+#endif
+                            isTpCacheBatch.writeT();
+                            writeBytesByte(tailp, 0x01);
+
+                            timer.start();
+
+                            memcpy(nowpx, nxx, n * sizeof(T));
+                            memcpy(nowpy, nxy, n * sizeof(T));
+                            memcpy(nowpz, nxz, n * sizeof(T));
+
+                            quantizer.mergeUnpreds(temQuantizer);
+                            if(!est_lock) est_time += timer.stop();
+                            if(!est_lock) est_time += est_time_encode;
+//                            getTPArrayAndOverwrite(nowpx, nowpy, nowpz, prepx, prepy, prepz, errx + errlen, erry + errlen,
+//                                           errz + errlen, quantizer, n);
+                            errlen += n;
+                        }
+                        delete[] bytesv1;
+                        break;
+                    }
+                    case 0x01 : {
+                        size_t cmpSizeS = 0;
+                        uchar *bytesv1 = compressSimpleBlocking(conf1, datax + t * n, datay + t * n, dataz + t * n,
+                                                                cmpSizeS, p, blkflag, bx, by, bz);
+                        compressed_size = cmpSizeS;
+#if __batch_info
+                        printf("[13]\e[34m\e[1mnew batch, t = %zu\n\e[0m", t);
+#endif
+                        if (fflag > 1) {
+                            fflag -= fflag_stride;
+                            if (fflag < 1) fflag = 1;
+                            if (nt - t <= 2) fflag = 1;
+                            conf1.absErrorBound = conf.absErrorBound / fflag;
+                        }
+                        writeBytesByte(tailp, 0x00);
+                        write(cmpSizeS, tail);
+                        write(bytesv1, cmpSizeS, tail);
+                        const uchar *bytesv1c = bytesv1;
+                        decompressSimpleBlocking(bytesv1c, nowpx, nowpy, nowpz, outSize, cmpSizeS);
+                        delete[] bytesv1;
+                        break;
+                    }
 //                    case 0x02 : {
 //                        size_t cmpSizeT = 0;
 //                        LinearQuantizer<T> temQuantizer(conf.absErrorBound, radius);
@@ -1926,11 +1977,11 @@ namespace SZ3 {
 //                        }
 //                        break;
 //                    }
-//                    default: {
-//                        perror("Abnormal return value of isTPCache.\n");
-//                        exit(-1);
-//                    }
-//                }
+                    default: {
+                        perror("Abnormal return value of isTPCache.\n");
+                        exit(-1);
+                    }
+                }
 
                 if (ord != nullptr) {
                     for (size_t i = 0; i < n; i++) {
@@ -1964,13 +2015,9 @@ namespace SZ3 {
 
 //            delete[] decmpdata1;
             delete[] p;
-//            delete[] temp;
-            delete[] pdx;
-            delete[] errx;
-            delete[] pdy;
-            delete[] erry;
-            delete[] pdz;
-            delete[] errz;
+            delete[] pda;
+            delete[] erra;
+//            delete[] nxa;
 
             uchar *lossless_data = lossless.compress(bytes, tail - bytes, compressed_size);
             delete[] bytes;
@@ -2036,6 +2083,9 @@ namespace SZ3 {
 
             size_t nt = conf.dims[0];
             size_t n = conf.dims[1];
+
+            Timer timer;
+            timer.start();
 
             T fflag = 1;
 
@@ -2112,7 +2162,7 @@ namespace SZ3 {
                     compressed_size1 = 0;
                     size_midl += compressed_size1;
                     blockSizeCache.init();
-//                    isTpCacheBatch.init();
+                    isTpCacheBatch.init();
 
                     compressTemporalPredictionOnSlice(confSliceTest, datax, datay, dataz, size_midr, nullptr,
                                                       blkflag, bx, by, bz, bytes1, compressed_size1, decmpdata1, ord1, midr);
@@ -2121,7 +2171,7 @@ namespace SZ3 {
                     compressed_size1 = 0;
                     size_midr += compressed_size1;
                     blockSizeCache.init();
-//                    isTpCacheBatch.init();
+                    isTpCacheBatch.init();
 //                    printf("l:[%.2f, %zu], r:[%.2f, %zu]\n", midl, size_midl, midr, size_midr);
 
                     if (size_midl < size_midr) {
@@ -2133,7 +2183,10 @@ namespace SZ3 {
                 fflag = (l + r) / 2;
             }
 
-//            printf("fflag = %.6lf\n", fflag);
+            printf("fflag = %.6lf\n", fflag);
+
+            printf("fflag time = %.6lfs\n", timer.stop());
+            est_lock = false;
 
             for (size_t l = 0; l < nt; l += bt) {
 
@@ -2197,6 +2250,8 @@ namespace SZ3 {
 
                 delete[] sliceBytes;
             }
+
+            printf("est time = %.6lfs\n", est_time);
 
             delete[] decmpdata1;
 
