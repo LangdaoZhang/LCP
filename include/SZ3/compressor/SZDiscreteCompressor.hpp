@@ -18,6 +18,8 @@
 #include <algorithm>
 #include <math.h>
 #include <iostream>
+#include <random>
+#include <cmath>
 
 #define __OUTPUT_INFO 0
 #define __soft_eb 0
@@ -1315,6 +1317,96 @@ namespace SZ3 {
         };
 
         IsTPCache isTpCacheFirst, isTpCacheBatch;
+
+//        class TPSizeCache {
+//        public:
+//
+//            TPSizeCache() {
+//                n = 0;
+//                prex = nullptr;
+//                prey = nullptr;
+//                prez = nullptr;
+//                cmpSize = 0;
+//            }
+//
+//            ~TPSizeCache() {
+//                delete[] prex;
+//                delete[] prey;
+//                delete[] prez;
+//            }
+//
+//            size_t n;
+//            ska::unordered_set<size_t> piv;
+//            size_t *prex, *prey, *prez;
+//            size_t cmpSize;
+//
+//            void init(size_t n_) {
+//                n = n_;
+//                static std::mt19937 gen(16707);
+//                std::uniform_int_distribution<size_t> dis(1, n);
+//                while(piv.size() * 100 < n) {
+//                    piv.insert(dis(gen));
+//                }
+//                prex = new size_t[n];
+//                prey = new size_t[n];
+//                prez = new size_t[n];
+//                cmpSize = 0;
+//                for (size_t it : piv) {
+//                    printf("%zu ", it);
+//                }
+//                printf("\n");
+//            }
+//
+//            void clear(size_t n_ = 0) {
+//                if (n_ > 0) n = n_;
+//                cmpSize = 0;
+//            }
+//
+//            /*
+//             * 0x00: use the last size
+//             * 0x01: need to test
+//             */
+//
+//            uchar test(size_t *pre, size_t *err) {
+//                uchar fail = 0;
+////                size_t max_diff = 0;
+//                for (size_t it : piv) {
+//                    if (pre[it] == 0) continue;
+//                    if (err[it] == 0) {
+//                        fail = 1;
+//                        break;
+//                    }
+//                    size_t diff = err[it] > pre[it] ? err[it] - pre[it] : pre[it] - err[it];
+////                    max_diff = std::max(max_diff, diff);
+//                    if (diff >= 2) {
+//                        fail = 1;
+//                        break;
+//                    }
+//                }
+////                printf("max_diff = %zu\n", max_diff);
+//                return fail;
+//            }
+//
+//            uchar test(size_t *errx, size_t *erry, size_t *errz) {
+//                if (cmpSize == 0) return 0x01;
+//                return test(prex, errx) | test(prey, erry) | test(prez, errz);
+//            }
+//
+//            void write(size_t *errx, size_t *erry, size_t *errz, size_t cmpSize_) {
+//                memcpy(prex, errx, n * sizeof(size_t));
+//                memcpy(prey, erry, n * sizeof(size_t));
+//                memcpy(prez, errz, n * sizeof(size_t));
+//
+//                cmpSize = cmpSize_;
+//            }
+//
+//            size_t getSize() {
+//                return cmpSize;
+//            }
+//
+//        };
+
+//        TPSizeCache tpSizeCache[2];
 
         void getTPArray1D(T *data, T *predData, size_t *err, LinearQuantizer<T> &quantizer, size_t n) {
             for (size_t i = 0; i < n; i++) {
