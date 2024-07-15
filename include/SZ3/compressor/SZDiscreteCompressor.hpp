@@ -1273,12 +1273,9 @@ namespace SZ3 {
 
             void writeS() {
                 isTP = 0;
-                // maximum = 8
-                // maximum = 258
+                // maximum = 32
                 cnts = limit >> 1;
-//                cnts = std::max(cnts, (size_t) 8);
-                if (limit < (1 << 4))  limit <<= 1;
-//                if (limit < (1 << 9))  limit <<= 1;
+                if (limit < (1 << 6))  limit <<= 1;
             }
 
             void writeT() {
