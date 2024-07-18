@@ -41,7 +41,7 @@ void sortAndVerify(T *a, T *b, size_t *ord, size_t n, std::string str) {
     }
 
 //    for(size_t i=0;i<n;i++){
-//        if(fabs(a[i] - c[i]) > 1e-4){
+//        if(fabs(a[i] - c[i]) > eb){
 //            printf("%zu %.12f %.12f %.12f\n", i, c[i], a[i], fabs(a[i] - c[i]));
 //            exit(-1);
 //        }

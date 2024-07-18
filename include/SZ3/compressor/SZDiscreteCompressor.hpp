@@ -519,42 +519,6 @@ namespace SZ3 {
 
         }
 
-//        void preQuantize(const Config &conf, T &px, T *datax, size_t *qx, std::vector<T> &unquant) {
-//
-//            px = datax[0];
-//            for (size_t i = 1; i < conf.num; i++) {
-//                px = std::min(px, datax[i]);
-//            }
-//
-//            for (size_t i = 0; i < conf.num; i++) {
-//                qx[i] = (size_t) ((datax[i] - px) / conf.absErrorBound) / 2;
-//                T decx = (qx[i] << 1 | 1) * conf.absErrorBound + px;
-//                if (fabs(decx - datax[i]) > conf.absErrorBound) {
-//                    qx[i] = -1;
-//                    unquant.push_back(datax[i]);
-//                }
-//            }
-//        }
-//
-//        void preQuantizeByOrder(const Config &conf, T &px, T *datax, size_t *qx, std::vector<T> &unquant, size_t *ord) {
-//            if(ord == nullptr) {
-//                preQuantize(conf, px, datax, qx, unquant);
-//                return;
-//            }
-//            px = datax[0];
-//            for (size_t i = 1; i < conf.num; i++) {
-//                px = std::min(px, datax[i]);
-//            }
-//            for (size_t i = 0; i < conf.num; i++) {
-//                qx[i] = (size_t) ((datax[ord[i]] - px) / conf.absErrorBound) / 2;
-//                T decx = (qx[i] << 1 | 1) * conf.absErrorBound + px;
-//                if (fabs(decx - datax[ord[i]]) > conf.absErrorBound) {
-//                    qx[i] = -1;
-//                    unquant.push_back(datax[ord[i]]);
-//                }
-//            }
-//        }
-
         /*
          * To compress the data from datax, datay and dataz using configure conf
          * Store the results in the return pointer, and store the size compressed data in compressed_data
@@ -575,27 +539,18 @@ namespace SZ3 {
                 px = std::min(px, datax[i]);
             }
             rx -= px;
-//            if(px!=0) for(size_t i=0;i<conf.num;i++){
-//                datax[i] -= px;
-//            }
 
             for (size_t i = 0; i < conf.num; i++) {
                 ry = std::max(ry, datay[i]);
                 py = std::min(py, datay[i]);
             }
             ry -= py;
-//            if(py!=0) for(size_t i=0;i<conf.num;i++){
-//                datay[i] -= py;
-//            }
 
             for (size_t i = 0; i < conf.num; i++) {
                 rz = std::max(rz, dataz[i]);
                 pz = std::min(pz, dataz[i]);
             }
             rz -= pz;
-//            if(pz!=0) for(size_t i=0;i<conf.num;i++){
-//                dataz[i] -= pz;
-//            }
 
             std::vector<size_t> b = {0, 0, 0};
 
@@ -662,13 +617,6 @@ namespace SZ3 {
 
 #endif
 
-            // maybe use some tree data structure or sorting method to boost this process
-            // 1. hashmap, then use faster sorting algos like Radix Sort
-            // 2. multi tree?
-//            std::map<size_t, std::vector<Node>> mp;
-//            Node *vec = new Node[conf.num]{};
-//            ska::unordered_map<size_t, std::vector<Node>> mp;
-
 #if __OUTPUT_INFO
 
             printf("begin blocking\n");
@@ -710,16 +658,6 @@ namespace SZ3 {
                     T decx = (x << 1 | 1) * conf.absErrorBound + px, decy =
                             (y << 1 | 1) * conf.absErrorBound + py, decz = (z << 1 | 1) * conf.absErrorBound + pz;
 
-//                    if (fabs(decx - datax[i]) > conf.absErrorBound || fabs(decy - datay[i]) > conf.absErrorBound ||
-//                        fabs(decz - dataz[i]) > conf.absErrorBound) {
-//                        unx.push_back(datax[i]);
-//                        uny.push_back(datay[i]);
-//                        unz.push_back(dataz[i]);
-//                        NodeWithOrder tem(unid, unx.size() - 1, i);
-//                        vec[i] = tem;
-//                        continue;
-//                    }
-
                     if (fabs(decx - datax[i]) > conf.absErrorBound) {
                         unx.push_back(i << 1 | (decx > datax[i] ? 1 : 0));
                     }
@@ -738,38 +676,13 @@ namespace SZ3 {
                     size_t cz = z / bz;
                     size_t dz = z % bz;
 
-//                    if(datax[i] >= 0.229 && datax[i] <= 0.230)
-//                        if(datay[i] >= 0.624 && datay[i] <= 0.625)
-//                            if(dataz[i] >= 0.109 && dataz[i] <= 0.110){
-//                                printf("i = %zu\n", i);
-//                                printf("b %zu %zu %zu | n %zu %zu %zu\n", bx, by, bz, nx, ny, nz);
-//                                printf("c %zu %zu %zu %zu | q %zu | d %zu %zu %zu %zu\n", cx / 2 + cy / 2 * nx + cz / 2 * nx * ny, cx / 2, cy / 2, cz / 2, ((cx & 1) << 0) | ((cy & 1) << 1) | ((cz & 1) << 2), (dx + dy * bx + dz * bx * by), dx, dy, dz);
-//                            }
-
                     NodeWithOrder tem(cx / 2 + cy / 2 * nx + cz / 2 * nx * ny,
                                       (dx + dy * bx + dz * bx * by) | ((cx & 1) << 60) | ((cy & 1) << 61) |
                                       ((cz & 1) << 62), i);
                     vec[i] = tem;
                 }
 
-//                Timer timer(true);
-
-//                std::sort(vec,vec+conf.num,[&](NodeWithOrder& u, NodeWithOrder& v){return u.id==v.id?u.reid<v.reid:u.id<v.id;});
-
-//                size_t *reposOut = new size_t[conf.num];
-//                for(size_t i=0;i<conf.num;i++){
-//                    reposOut[i] = vec[i].reid & 0x0fffffffffffffff;
-//                }
-//                char buffer[1024];
-//                sprintf(buffer, "/Users/longtaozhang/compress/repos/exaalt-83x1077290-eb=%.0e-blksz=%zux%zux%zu.txt", conf.absErrorBound, bx, by, bz);
-//                writeTextFile(buffer, reposOut, conf.num);
-//                delete[] reposOut;
-
                 radix_sort<NodeWithOrder>(vec, vec + conf.num);
-
-//                double sort_time = timer.stop();
-
-//                printf("sort time = %fs\n", sort_time);
 
                 for (size_t i = 0; i < conf.num; i++) {
                     ord[i] = vec[i].ord;
@@ -1116,10 +1029,6 @@ namespace SZ3 {
             ptail_data = tail_data;
 #endif
 
-//            char buffer[1024];
-//            sprintf(buffer, "/Users/longtaozhang/compress/repos/hacc-33554432-eb=%.0e-blksz=%zux%zux%zu.txt", conf.absErrorBound, bx, by, bz);
-//            writeTextFile(buffer, repos, conf.num);
-
             delete[] repos;
             if (bytes_repos != nullptr) delete[] bytes_repos;
 
@@ -1196,8 +1105,6 @@ namespace SZ3 {
                     }
                 }
 
-//                printf("%zu %zu %zu\n", unx.size(), uny.size(), unz.size());
-
                 delete[] ordv;
             }
 
@@ -1235,7 +1142,6 @@ namespace SZ3 {
 
             for (size_t i = 0; i < n; i++) {
                 a[i] = data[ord[i]];
-//                if(ord[i] < 0 || ord[i] >= n) printf("ord[%zu] = %zu\n", i, ord[i]), exit(-1);
             }
 
             memcpy(data, a, n * sizeof(T));
