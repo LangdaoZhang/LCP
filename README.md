@@ -4,7 +4,7 @@ SIGMOD 25 Paper 561 Artifact README
 LCP: Enhancing Scientific Data Management with Lossy Compression for Particles
 =====
 
-Note: LCP is built up on the SZ3 framework, as explained in Section 5 of the paper.
+<p style="font-size: 24px; color: red;">Note: LCP is built up on the SZ3 framework, as explained in Section 5 of the paper.</p>
 
 Newly Added Files for LCP based on SZ3 Framework:
 
