@@ -4,9 +4,7 @@ SIGMOD 25 Paper 561 Artifact README
 LCP: Enhancing Scientific Data Management with Lossy Compression for Particles
 =====
 
-<p style="font-size: 24px; color: red;">Note: LCP is built up on the SZ3 framework, as explained in Section 5 of the paper.</p>
-
-Newly Added Files for LCP based on SZ3 Framework:
+# Important functions of LCP:
 
 * /tools/sz3/lcp.cpp
 * /include/SZ3/compressor/SZDiscreteCompressor.hpp
@@ -76,8 +74,11 @@ lcp -z cmp.lcp -o dataset1-5423x3137.x.f32.dat.lcp.out dataset1-5423x3137.y.f32.
 
 
 
-SZ3: A Modular Error-bounded Lossy Compression Framework for Scientific Datasets
-=====
+# Note: LCP is built up on the SZ3 framework, as explained in Section 5 of the paper. The following is the README from SZ3
+
+
+## SZ3: A Modular Error-bounded Lossy Compression Framework for Scientific Datasets
+
 (C) 2016 by Mathematics and Computer Science (MCS), Argonne National Laboratory. See COPYRIGHT in top-level directory.
 
 * Major Authors: Sheng Di, Kai Zhao, Xin Liang
