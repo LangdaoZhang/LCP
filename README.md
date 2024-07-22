@@ -1,3 +1,76 @@
+SIGMOD 25 Paper 561 Artifact README
+=====
+
+LCP: Enhancing Scientific Data Management with Lossy Compression for Particles
+=====
+
+Note: LCP is built up on the SZ3 framework, as explained in Section 5 of the paper. 
+
+[//]: # (The ‘README.md’ belongs to SZ3 framework, not LCP.)
+
+# How to build LCP:
+
+[//]: # (## Installation)
+
+* mkdir build && cd build
+* cmake -DCMAKE_INSTALL_PREFIX:PATH=[INSTALL_DIR] ..
+* make lcp
+* make install
+
+# How to download the data:
+
+use the following link to download the test data (Copper):
+
+https://g-8d6b0.fd635.8443.data.globus.org/ds131.2/Data-Reduction-Repo/raw-data/EXAALT/SDRBENCH-exaalt-copper.tar.gz
+
+The file names of the test data are dataset1-5423x3137.x.f32.dat, dataset1-5423x3137.y.f32.dat, dataset1-5423x3137.z.f32.dat.
+
+## Usage
+
+The default datatype is 32 bit float numbers. 
+
+### Arguments
+
+| Arguments                                          | Explanation                                                                |
+|----------------------------------------------------|----------------------------------------------------------------------------|
+| -i [input_file_x] [input_file_y] [input_file_z]    | The three input files need to be compressed                                |
+| -z [compressed_file]                               | The compressed file name                                                   |
+| -o [output_file_x] [output_file_y] [output_file_z] | The three decompressed files                                               |
+| -osn                                               | Decompress with the name + '.lcp.out' corresponding to the input files     |
+| -eb [error_bound]                                  | The user set absolute error bound                                          |
+| -1 [number_of_particles]                           | The number of particles                                                    |
+| -2 [number_of_frames] [number_of_particles]        | The numbers of time frames and the number of particles                     |
+| -bt [bath_size]                                    | The maximum number of frames within one batch                              |
+| -a                                                 | Output the compression results like the maximum absolute error, PSNR, etc. |
+
+[//]: # (|                                                    |                                                                            |)
+
+[//]: # (|                                                    |                                                                            |)
+
+[//]: # (|                                                    |                                                                            |)
+
+[//]: # (|                                                    |                                                                            |)
+
+# How to test:
+
+For example, you can try the following command for the test:
+
+### Download the data:
+x-lzhang11@login03.anvil:[data] $ wget https://g-8d6b0.fd635.8443.data.globus.org/ds131.2/Data-Reduction-Repo/raw-data/EXAALT/SDRBENCH-exaalt-copper.tar.gz
+
+x-lzhang11@login03.anvil:[data] $ tar -xzf SDRBENCH-exaalt-copper.tar.gz
+
+x-lzhang11@login03.anvil:[data] $ cd SDRBENCH-exaalt-copper/
+
+### Compress and decompress at the same time with verification:
+x-lzhang11@login03.anvil:[SDRBENCH-exaalt-copper] $ lcp -i dataset1-5423x3137.x.f32.dat dataset1-5423x3137.y.f32.dat dataset1-5423x3137.z.f32.dat -z cmp.lcp -osn -2 5423 3137 -eb 1e-3 -bt 16 -a
+
+### Compress only:
+x-lzhang11@login03.anvil:[SDRBENCH-exaalt-copper] $ lcp -i dataset1-5423x3137.x.f32.dat dataset1-5423x3137.y.f32.dat dataset1-5423x3137.z.f32.dat -z cmp.lcp -2 5423 3137 -eb 1e-3 -bt 16
+
+### Decompress:
+x-lzhang11@login03.anvil:[SDRBENCH-exaalt-copper] $ lcp -z cmp.lcp -o dataset1-5423x3137.x.f32.dat.lcp.out dataset1-5423x3137.y.f32.dat.lcp.out dataset1-5423x3137.z.f32.dat.lcp.out -2 5423 3137
+
 SZ3: A Modular Error-bounded Lossy Compression Framework for Scientific Datasets
 =====
 (C) 2016 by Mathematics and Computer Science (MCS), Argonne National Laboratory. See COPYRIGHT in top-level directory.

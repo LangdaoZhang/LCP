@@ -2178,9 +2178,9 @@ namespace SZ3 {
                 fflag = (l + r) / 2;
             }
 
-            printf("fflag = %.6lf\n", fflag);
+//            printf("fflag = %.6lf\n", fflag);
 
-            printf("fflag time = %.6lfs\n", timer.stop());
+//            printf("fflag time = %.6lfs\n", timer.stop());
             est_lock = false;
 
             for (size_t l = 0; l < nt; l += bt) {
@@ -2246,7 +2246,7 @@ namespace SZ3 {
                 delete[] sliceBytes;
             }
 
-            printf("est time = %.6lfs\n", est_time);
+//            printf("est time = %.6lfs\n", est_time);
 
             delete[] decmpdata1;
 
