@@ -4,9 +4,12 @@ SIGMOD 25 Paper 561 Artifact README
 LCP: Enhancing Scientific Data Management with Lossy Compression for Particles
 =====
 
-Note: LCP is built up on the SZ3 framework, as explained in Section 5 of the paper. 
+Note: LCP is built up on the SZ3 framework, as explained in Section 5 of the paper.
 
-[//]: # (The ‘README.md’ belongs to SZ3 framework, not LCP.)
+Newly Added Files for LCP based on SZ3 Framework:
+
+* /tools/sz3/lcp.cpp
+* /include/SZ3/compressor/SZDiscreteCompressor.hpp
 
 # How to build LCP:
 
@@ -56,20 +59,22 @@ The default datatype is 32 bit float numbers.
 For example, you can try the following command for the test:
 
 ### Download the data:
-x-lzhang11@login03.anvil:[data] $ wget https://g-8d6b0.fd635.8443.data.globus.org/ds131.2/Data-Reduction-Repo/raw-data/EXAALT/SDRBENCH-exaalt-copper.tar.gz
+wget https://g-8d6b0.fd635.8443.data.globus.org/ds131.2/Data-Reduction-Repo/raw-data/EXAALT/SDRBENCH-exaalt-copper.tar.gz
 
-x-lzhang11@login03.anvil:[data] $ tar -xzf SDRBENCH-exaalt-copper.tar.gz
+tar -xzf SDRBENCH-exaalt-copper.tar.gz
 
-x-lzhang11@login03.anvil:[data] $ cd SDRBENCH-exaalt-copper/
+cd SDRBENCH-exaalt-copper/
 
 ### Compress and decompress at the same time with verification:
-x-lzhang11@login03.anvil:[SDRBENCH-exaalt-copper] $ lcp -i dataset1-5423x3137.x.f32.dat dataset1-5423x3137.y.f32.dat dataset1-5423x3137.z.f32.dat -z cmp.lcp -osn -2 5423 3137 -eb 1e-3 -bt 16 -a
+lcp -i dataset1-5423x3137.x.f32.dat dataset1-5423x3137.y.f32.dat dataset1-5423x3137.z.f32.dat -z cmp.lcp -osn -2 5423 3137 -eb 1e-3 -bt 16 -a
 
 ### Compress only:
-x-lzhang11@login03.anvil:[SDRBENCH-exaalt-copper] $ lcp -i dataset1-5423x3137.x.f32.dat dataset1-5423x3137.y.f32.dat dataset1-5423x3137.z.f32.dat -z cmp.lcp -2 5423 3137 -eb 1e-3 -bt 16
+lcp -i dataset1-5423x3137.x.f32.dat dataset1-5423x3137.y.f32.dat dataset1-5423x3137.z.f32.dat -z cmp.lcp -2 5423 3137 -eb 1e-3 -bt 16
 
 ### Decompress:
-x-lzhang11@login03.anvil:[SDRBENCH-exaalt-copper] $ lcp -z cmp.lcp -o dataset1-5423x3137.x.f32.dat.lcp.out dataset1-5423x3137.y.f32.dat.lcp.out dataset1-5423x3137.z.f32.dat.lcp.out -2 5423 3137
+lcp -z cmp.lcp -o dataset1-5423x3137.x.f32.dat.lcp.out dataset1-5423x3137.y.f32.dat.lcp.out dataset1-5423x3137.z.f32.dat.lcp.out -2 5423 3137
+
+
 
 SZ3: A Modular Error-bounded Lossy Compression Framework for Scientific Datasets
 =====
@@ -172,18 +177,18 @@ Use examples/print_h5repack_args.c to construct the cd_values parameters based o
 
 Compression: 
 
-[sdi@localhost build]$ h5repack -f UD=32024,0,5,0,981668463,0,0,0 -i ~/Data/CESM-ATM-tylor/1800x3600/CLDLOW_1_1800_3600.dat.h5 -o ~/Data/CESM-ATM-tylor/1800x3600/CLDLOW_1_1800_3600.dat.sz3.h5
+h5repack -f UD=32024,0,5,0,981668463,0,0,0 -i ~/Data/CESM-ATM-tylor/1800x3600/CLDLOW_1_1800_3600.dat.h5 -o ~/Data/CESM-ATM-tylor/1800x3600/CLDLOW_1_1800_3600.dat.sz3.h5
 
 Decompression:
 
-[sdi@localhost build]$ h5repack -f NONE -i ~/Data/CESM-ATM-tylor/1800x3600/CLDLOW_1_1800_3600.dat.sz3.h5 -o ~/Data/CESM-ATM-tylor/1800x3600/CLDLOW_1_1800_3600.dat.sz3.out.h5
+h5repack -f NONE -i ~/Data/CESM-ATM-tylor/1800x3600/CLDLOW_1_1800_3600.dat.sz3.h5 -o ~/Data/CESM-ATM-tylor/1800x3600/CLDLOW_1_1800_3600.dat.sz3.out.h5
 
 
 Alternatively, the error bound information can also be given through sz3.config (when there are no cd_values for h5repack)
 
 * Example (You need to put sz3.config in the current local directory so that it will read sz3.config to get error bounds):
 
-[sdi@localhost build]$ h5repack -f UD=32024,0 -i ~/Data/CESM-ATM-tylor/1800x3600/CLDLOW_1_1800_3600.dat.h5 -o ~/Data/CESM-ATM-tylor/1800x3600/CLDLOW_1_1800_3600.dat.sz3.h5
+h5repack -f UD=32024,0 -i ~/Data/CESM-ATM-tylor/1800x3600/CLDLOW_1_1800_3600.dat.h5 -o ~/Data/CESM-ATM-tylor/1800x3600/CLDLOW_1_1800_3600.dat.sz3.h5
 
 ## Version history
 
