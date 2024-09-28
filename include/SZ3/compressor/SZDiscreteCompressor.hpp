@@ -519,6 +519,117 @@ namespace SZ3 {
 
         }
 
+        enum EncodingMethod {
+            HUFFMAN,
+            FIX_LENGTH,
+            NOT_SPECIFIED,
+            ENCODING_STATE_NUM
+        };
+
+        static const std::string encodingMethod2String (EncodingMethod e) {
+            switch (e) {
+                case HUFFMAN : return "HUFFMAN";
+                case FIX_LENGTH : return "FIX_LENGTH";
+                case NOT_SPECIFIED : return "NOT_SPECIFIED";
+                default : return "ERROR";
+            }
+            return "ERROR";
+        };
+
+        class EncodingMethodsCache {
+        public:
+
+            EncodingMethodsCache() {
+                init();
+            }
+
+            void init() {
+                mapEncodingMethodCacheState.clear();
+            }
+
+            EncodingMethod *get(double eb, size_t bx, size_t by, size_t bz) {
+
+                size_t h = getStateHash(eb, bx, by, bz);
+                if (mapEncodingMethodCacheState.count(h) == 0) {
+                    mapEncodingMethodCacheState[h] = EncodingMethodCacheState();
+                }
+                EncodingMethodCacheState &state = mapEncodingMethodCacheState[h];
+
+                if (state.cnt == 0) {
+                    state.update(NOT_SPECIFIED, NOT_SPECIFIED, NOT_SPECIFIED, NOT_SPECIFIED);
+                }
+                else {
+                    --state.cnt;
+                }
+
+                return (EncodingMethod*) state.methods;
+            }
+
+            void write(double eb, size_t bx, size_t by, size_t bz, int64_t cnt_ = 1ll << 32) {
+
+                size_t h = getStateHash(eb, bx, by, bz);
+                if (mapEncodingMethodCacheState.count(h) == 0) {
+                    mapEncodingMethodCacheState[h] = EncodingMethodCacheState();
+                }
+                EncodingMethodCacheState &state = mapEncodingMethodCacheState[h];
+
+                state.cnt = cnt_;
+            }
+
+            void write(double eb, size_t bx, size_t by, size_t bz,
+                       EncodingMethod blkstMethod_, EncodingMethod blkcntMethod_,
+                       EncodingMethod quadsMethod_, EncodingMethod reposMethod_, int64_t cnt_ = 1ll << 32) {
+
+                size_t h = getStateHash(eb, bx, by, bz);
+                if (mapEncodingMethodCacheState.count(h) == 0) {
+                    mapEncodingMethodCacheState[h] = EncodingMethodCacheState();
+                }
+                EncodingMethodCacheState &state = mapEncodingMethodCacheState[h];
+
+                state.update(blkstMethod_, blkcntMethod_, quadsMethod_, reposMethod_);
+                state.cnt = cnt_;
+            }
+
+        private:
+
+            size_t getStateHash(double error_bound, size_t bx, size_t by, size_t bz) {
+                size_t heb = std::hash<double>{}(error_bound);
+                size_t hb = bx << 32 | by << 16 | bz;
+                return heb ^ hb;
+            }
+
+            class EncodingMethodCacheState {
+            public:
+
+                EncodingMethodCacheState() {
+                    cnt = 0;
+//                    blkstMethod = NOT_SPECIFIED;
+//                    blkcntMethod = NOT_SPECIFIED;
+//                    quadsMethod = NOT_SPECIFIED;
+//                    reposMethod = NOT_SPECIFIED;
+//                    methods[0] = methods[1] = methods[2] = methods[3] = NOT_SPECIFIED;
+                    update(NOT_SPECIFIED, NOT_SPECIFIED, NOT_SPECIFIED, NOT_SPECIFIED);
+                }
+
+                void update(EncodingMethod blkstMethod, EncodingMethod blkcntMethod, EncodingMethod quadsMethod, EncodingMethod reposMethod) {
+                    methods[0] = blkstMethod;
+                    methods[1] = blkcntMethod;
+                    methods[2] = quadsMethod;
+                    methods[3] = reposMethod;
+                }
+
+                int64_t cnt;
+                EncodingMethod methods[4];
+//                EncodingMethod &blkstMethod = methods[0];
+//                EncodingMethod &blkcntMethod = methods[1];
+//                EncodingMethod &quadsMethod = methods[2];
+//                EncodingMethod &reposMethod = methods[3];
+            };
+
+            std::unordered_map<size_t, EncodingMethodCacheState> mapEncodingMethodCacheState;
+
+        } encodingMethodsCache;
+
         /*
          * To compress the data from datax, datay and dataz using configure conf
          * Store the results in the return pointer, and store the size compressed data in compressed_data
@@ -780,51 +891,76 @@ namespace SZ3 {
             uchar *ptail_data = tail_data;
 #endif
 
+            EncodingMethod *encodingMethods  = encodingMethodsCache.get(conf.absErrorBound, bx, by, bz);
+            EncodingMethod *blkstMethod_ptr  = &encodingMethods[0];
+            EncodingMethod *blkcntMethod_ptr = &encodingMethods[1];
+            EncodingMethod *quadsMethod_ptr  = &encodingMethods[2];
+            EncodingMethod *reposMethod_ptr  = &encodingMethods[3];
+            uchar encodingMethodsCacheUpdate = 0x00;
+            if (encodingMethods[0] == NOT_SPECIFIED ||
+                encodingMethods[1] == NOT_SPECIFIED ||
+                encodingMethods[2] == NOT_SPECIFIED ||
+                encodingMethods[3] == NOT_SPECIFIED) {
+                encodingMethodsCacheUpdate = 0x01;
+            }
+
+//                encodingMethods[0] = encodingMethods[1] = encodingMethods[2] = encodingMethods[3] = FIX_LENGTH; // NOT_SPECIFIED;
+
             uchar *bytes_blkst = nullptr, *tail_blkst = nullptr;
-            size_t maxblkst = 0;
-            for (size_t i = 0; i < blknum; i++) maxblkst = std::max(maxblkst, blkst[i]);
-#ifndef __blockst_encoding_method
-            if (maxblkst <= (1 << 30) || blknum <= (1 << 20) || (1. * nx * ny * nz / blknum) < 1e6) {
-#endif
-                bytes_blkst = new uchar[std::max(blknum * 16, (size_t) (1 << 16))], tail_blkst = bytes_blkst;
-                encoder.preprocess_encode(blkst, blknum, 0, 0x00);
-                encoder.save(tail_blkst);
-                encoder.encode(blkst, blknum, tail_blkst);
-#ifndef __blockst_encoding_method
-            }
-#endif
 
-            vtail_data = tail_data;
-            encoder.preprocess_encode(blkst, blknum, 0, 0x01);
-            encoder.save(vtail_data);
-            encoder.encode(blkst, blknum, vtail_data);
+            switch (*blkstMethod_ptr) {
 
-#ifdef  __blockst_encoding_method
-#if __blockst_encoding_method == __huf
-            write(bytes_blkst, tail_blkst - bytes_blkst, tail_data);
-#else
-            tail_data = vtail_data;
-#endif
-#else
-            if (bytes_blkst == nullptr) {
-                tail_data = vtail_data;
-            } else {
-                size_t cmpSize0 = 0, cmpSize1 = 0;
-                delete[] lossless.compress(bytes_blkst, tail_blkst - bytes_blkst, cmpSize0);
-                delete[] lossless.compress(tail_data, vtail_data - tail_data, cmpSize1);
-//                printf("blkst %zu %zu\n", (size_t)(tail_blkst - bytes_blkst), (size_t)(vtail_data - tail_data));
-//                printf("blkst %zu %zu\n", cmpSize0, cmpSize1);
-//                printf("blkst %zu %zu\n", cmpSize0, cmpSize1);
-//                printf("blkst %.2lf KB %.2lf KB\n", 1. * cmpSize0 / 1024, 1. * cmpSize1 / 1024);
-//                printf("blkst %.2lf MB %.2lf MB\n", 1. * cmpSize0 / 1024 / 1024, 1. * cmpSize1 / 1024 / 1024);
-                if (cmpSize0 < cmpSize1) {
-                    write(bytes_blkst, tail_blkst - bytes_blkst, tail_data);
-                } else {
-                    tail_data = vtail_data;
+                case HUFFMAN: {
+
+                    encoder.preprocess_encode(blkst, blknum, 0, 0x00);
+                    encoder.save(tail_data);
+                    encoder.encode(blkst, blknum, tail_data);
+
+                    break;
                 }
-            }
-#endif
+                case FIX_LENGTH: {
 
+                    encoder.preprocess_encode(blkst, blknum, 0, 0x01);
+                    encoder.save(tail_data);
+                    encoder.encode(blkst, blknum, tail_data);
+
+                    break;
+                }
+                case NOT_SPECIFIED: {
+
+                    bytes_blkst = new uchar[std::max(blknum * 16, (size_t) (1 << 16))], tail_blkst = bytes_blkst;
+                    vtail_data = tail_data;
+
+                    encoder.preprocess_encode(blkst, blknum, 0, 0x00);
+                    encoder.save(vtail_data);
+                    encoder.encode(blkst, blknum, vtail_data);
+
+                    encoder.preprocess_encode(blkst, blknum, 0, 0x01);
+                    encoder.save(tail_blkst);
+                    encoder.encode(blkst, blknum, tail_blkst);
+
+                    size_t cmpSize0 = 0, cmpSize1 = 0;
+                    delete[] lossless.compress(tail_data, vtail_data - tail_data, cmpSize0);
+                    delete[] lossless.compress(bytes_blkst, tail_blkst - bytes_blkst, cmpSize1);
+
+                    if (cmpSize0 < cmpSize1) {
+                        tail_data = vtail_data;
+                        *blkstMethod_ptr = HUFFMAN;
+                    } else {
+                        write(bytes_blkst, tail_blkst - bytes_blkst, tail_data);
+                        *blkstMethod_ptr = FIX_LENGTH;
+                    }
+
+                    delete[] bytes_blkst;
+
+                    break;
+                }
+                default: {
+                    exit(-1);
+                }
+            };
+
+            delete[] blkst;
 
 #if __OUTPUT_INFO
 
@@ -836,48 +972,63 @@ namespace SZ3 {
 
 #endif
 
-            delete[] blkst;
-            if (bytes_blkst != nullptr) delete[] bytes_blkst;
+            switch (*blkcntMethod_ptr) {
 
-            // use huffman encoder to compress the number of points in each block
+                case HUFFMAN: {
 
-//            if(blkflag != 0x00){
-//                size_t tem = 0;
-//                for(size_t i=0;i<blknum;i++){
-//                    tem = std::max(tem, *(blkcnt + i));
-//                }
-//                printf("%zu\n", tem);
-//            }
+                    encoder.preprocess_encode(blkcnt, blknum, 0, 0xc0);
+                    encoder.save(tail_data);
+                    encoder.encode(blkcnt, blknum, tail_data);
 
-            uchar *bytes_blkcnt = new uchar[std::max(blknum * 8, (size_t) (1 << 16))], *tail_blkcnt = bytes_blkcnt;
-            encoder.preprocess_encode(blkcnt, blknum, 0, 0xc0);
-            encoder.save(tail_blkcnt);
-            encoder.encode(blkcnt, blknum, tail_blkcnt);
-
-            vtail_data = tail_data;
-            encoder.preprocess_encode(blkcnt, blknum, 0, 0xc1);
-            encoder.save(vtail_data);
-            encoder.encode(blkcnt, blknum, vtail_data);
-
-#ifdef  __blockcnt_encoding_method
-#if __blockcnt_encoding_method == __huf
-            write(bytes_blkcnt, tail_blkcnt - bytes_blkcnt, tail_data);
-#else
-            tail_data = vtail_data;
-#endif
-#else
-            {
-                size_t cmpSize0 = 0, cmpSize1 = 0;
-                delete[] lossless.compress(bytes_blkcnt, tail_blkcnt - bytes_blkcnt, cmpSize0);
-                delete[] lossless.compress(tail_data, vtail_data - tail_data, cmpSize1);
-//                printf("%zu %zu\n", cmpSize0, cmpSize1);
-                if (cmpSize0 < cmpSize1) {
-                    write(bytes_blkcnt, tail_blkcnt - bytes_blkcnt, tail_data);
-                } else {
-                    tail_data = vtail_data;
+                    break;
                 }
+
+                case FIX_LENGTH: {
+
+                    encoder.preprocess_encode(blkcnt, blknum, 0, 0xc1);
+                    encoder.save(tail_data);
+                    encoder.encode(blkcnt, blknum, tail_data);
+
+                    break;
+                }
+
+                case NOT_SPECIFIED: {
+
+                    uchar *bytes_blkcnt = new uchar[std::max(blknum * 8, (size_t) (1 << 16))], *tail_blkcnt = bytes_blkcnt;
+                    vtail_data = tail_data;
+
+                    encoder.preprocess_encode(blkcnt, blknum, 0, 0xc0);
+                    encoder.save(vtail_data);
+                    encoder.encode(blkcnt, blknum, vtail_data);
+
+                    encoder.preprocess_encode(blkcnt, blknum, 0, 0xc1);
+                    encoder.save(tail_blkcnt);
+                    encoder.encode(blkcnt, blknum, tail_blkcnt);
+
+                    size_t cmpSize0 = 0, cmpSize1 = 0;
+                    delete[] lossless.compress(tail_data, vtail_data - tail_data, cmpSize0);
+                    delete[] lossless.compress(bytes_blkcnt, tail_blkcnt - bytes_blkcnt, cmpSize1);
+
+                    if (cmpSize0 < cmpSize1) {
+                        tail_data = vtail_data;
+                        *blkcntMethod_ptr = HUFFMAN;
+                    } else {
+                        write(bytes_blkcnt, tail_blkcnt - bytes_blkcnt, tail_data);
+                        *blkcntMethod_ptr = FIX_LENGTH;
+                    }
+
+                    delete[] bytes_blkcnt;
+
+                    break;
+                }
+
+                default: {
+                    exit(-1);
+                }
+
             }
-#endif
+
+            delete[] blkcnt;
 
 
 #if __OUTPUT_INFO
@@ -890,159 +1041,139 @@ namespace SZ3 {
 
 #endif
 
-            delete[] blkcnt;
-            delete[] bytes_blkcnt;
+            switch (*quadsMethod_ptr) {
 
-            uchar *bytes_quads = new uchar[std::max((size_t) ceil(conf.num * 0.4),
-                                                    (size_t) 1024)], *tail_quads = bytes_quads;
-            encoder.preprocess_encode(quads, conf.num, 8, 0xc0);
-            encoder.save(tail_quads);
-            encoder.encode(quads, conf.num, tail_quads);
+                case HUFFMAN: {
 
-            vtail_data = tail_data;
-            encoder.preprocess_encode(quads, conf.num, 8, 0xc1);
-            encoder.save(vtail_data);
-            encoder.encode(quads, conf.num, vtail_data);
+                    encoder.preprocess_encode(quads, conf.num, 8, 0xc0);
+                    encoder.save(tail_data);
+                    encoder.encode(quads, conf.num, tail_data);
 
-//            size_t cmpSizeRepos0 = 0;
-//            size_t cmpSizeRepos1 = 0;
+                    break;
+                }
 
-#ifdef  __repos_encoding_method
-#if __repos_encoding_method == __huf
-            write(bytes_quads, tail_quads - bytes_quads, tail_data);
-#else
-            tail_data = vtail_data;
-#endif
-#else
-            {
-                size_t cmpSize0 = 0, cmpSize1 = 0;
-                delete[] lossless.compress(bytes_quads, tail_quads - bytes_quads, cmpSize0);
-                delete[] lossless.compress(tail_data, vtail_data - tail_data, cmpSize1);
-//                printf("quads %zu %zu\n", (size_t) (tail_quads - bytes_quads), (size_t) (vtail_data - tail_data));
-//                printf("quads %zu %zu\n", cmpSize0, cmpSize1);
-//                cmpSizeRepos0 += cmpSize0;
-//                cmpSizeRepos1 += cmpSize1;
-                if (cmpSize0 < cmpSize1) {
-                    write(bytes_quads, tail_quads - bytes_quads, tail_data);
-                } else {
-                    tail_data = vtail_data;
+                case FIX_LENGTH: {
+
+                    encoder.preprocess_encode(quads, conf.num, 8, 0xc1);
+                    encoder.save(tail_data);
+                    encoder.encode(quads, conf.num, tail_data);
+
+                    break;
+                }
+
+                case NOT_SPECIFIED: {
+
+                    uchar *bytes_quads = new uchar[std::max((size_t) ceil(conf.num * 0.4), (size_t) 1024)],
+                            *tail_quads = bytes_quads;
+                    vtail_data = tail_data;
+
+                    encoder.preprocess_encode(quads, conf.num, 8, 0xc0);
+                    encoder.save(vtail_data);
+                    encoder.encode(quads, conf.num, vtail_data);
+
+                    encoder.preprocess_encode(quads, conf.num, 8, 0xc1);
+                    encoder.save(tail_quads);
+                    encoder.encode(quads, conf.num, tail_quads);
+
+                    size_t cmpSize0 = 0, cmpSize1 = 0;
+                    delete[] lossless.compress(tail_data, vtail_data - tail_data, cmpSize0);
+                    delete[] lossless.compress(bytes_quads, tail_quads - bytes_quads, cmpSize1);
+
+                    if (cmpSize0 < cmpSize1) {
+                        tail_data = vtail_data;
+                        *quadsMethod_ptr = HUFFMAN;
+                    } else {
+                        write(bytes_quads, tail_quads - bytes_quads, tail_data);
+                        *quadsMethod_ptr = FIX_LENGTH;
+                    }
+
+                    delete[] bytes_quads;
+
+                    break;
+                }
+
+                default: {
+                    exit(-1);
                 }
             }
-#endif
-
-#if __OUTPUT_INFO
-
-            //            printf("size of quads = %.2lf MB, %zu bytes\n", 1. * (tail_quads - bytes_quads) / 1024 / 1024, tail_quads - bytes_quads);
-            //            size_t cmpQuadsSize;
-            //            delete[] lossless.compress(bytes_quads, tail_quads - bytes_quads, cmpQuadsSize);
-            //            printf("size of compressed blkcnt = %.2lf MB, %zu bytes\n", 1. * cmpQuadsSize / 1024 / 1024, cmpQuadsSize);
-
-#endif
 
             delete[] quads;
-            delete[] bytes_quads;
 
-            // use huffman encoder to encode the relative error of each point
+            switch (*reposMethod_ptr) {
 
-            uchar *bytes_repos = nullptr, *tail_repos = nullptr;
-#ifndef __repos_encoding_method
-            if (bx * by * bz <= (1llu << 48)) {
-#endif
-                bytes_repos = new uchar[std::max(
-                        conf.num * std::max((size_t) 4, (size_t) ceil(log2(1. * bx * by * bz) / 4.)),
-                        (size_t) (1 << 16))], tail_repos = bytes_repos;
-                encoder.preprocess_encode(repos, conf.num, 0, 0x00);
-                encoder.save(tail_repos);
-                encoder.encode(repos, conf.num, tail_repos);
-#ifndef __repos_encoding_method
-            }
-#endif
+                case HUFFMAN: {
 
-            vtail_data = tail_data;
-            encoder.preprocess_encode(repos, conf.num, bx * by * bz, 0xc1);
-            encoder.save(vtail_data);
-            encoder.encode(repos, conf.num, vtail_data);
+                    encoder.preprocess_encode(repos, conf.num, 0, 0x00);
+                    encoder.save(tail_data);
+                    encoder.encode(repos, conf.num, tail_data);
 
-#ifdef  __repos_encoding_method
-#if __repos_encoding_method == __huf
-            write(bytes_repos, tail_repos - bytes_repos, tail_data);
-#else
-            tail_data = vtail_data;
-#endif
-#else
-            if (bytes_repos == nullptr) {
-                tail_data = vtail_data;
-            } else {
-                size_t cmpSize0 = 0, cmpSize1 = 0;
-                delete[] lossless.compress(bytes_repos, tail_repos - bytes_repos, cmpSize0);
-                delete[] lossless.compress(tail_data, vtail_data - tail_data, cmpSize1);
-//                printf("repos %zu %zu\n", (size_t) (tail_repos - bytes_repos), (size_t) (vtail_data - tail_data));
-//                printf("repos %zu %zu\n", cmpSize0, cmpSize1);
-//                cmpSizeRepos0 += cmpSize0;
-//                cmpSizeRepos1 += cmpSize1;
-//                printf("repos %zu %zu\n", cmpSizeRepos0, cmpSizeRepos1);
-//                printf("repos %.2lf KB %.2lf KB\n", 1. * cmpSizeRepos0 / 1024, 1. * cmpSizeRepos1 / 1024);
-//                printf("repos %.2lf MB %.2lf MB\n", 1. * cmpSizeRepos0 / 1024 / 1024, 1. * cmpSizeRepos1 / 1024 / 1024);
-                if (cmpSize0 < cmpSize1) {
-                    write(bytes_repos, tail_repos - bytes_repos, tail_data);
-                } else {
-                    tail_data = vtail_data;
+                    break;
                 }
-            }
-#endif
 
-//            uchar *bytes_repos = new uchar[std::max(conf.num * std::max((size_t)16, (size_t)ceil(log2(1. * bx * by * bz))), (size_t)1024)], *tail_repos = bytes_repos;
-////            for(size_t i=0;i<conf.num;i++) printf("%zu", reposx[i]);
-//            encoder.preprocess_encode(reposx, conf.num, 0, 0xc1);
-//            encoder.save(tail_repos);
-//            encoder.encode(reposx, conf.num, tail_repos);
-//            encoder.preprocess_encode(reposy, conf.num, 0, 0xc1);
-//            encoder.save(tail_repos);
-//            encoder.encode(reposy, conf.num, tail_repos);
-//            encoder.preprocess_encode(reposz, conf.num, 0, 0xc1);
-//            encoder.save(tail_repos);
-//            encoder.encode(reposz, conf.num, tail_repos);
+                case FIX_LENGTH: {
 
-//            size_t *poslist = new size_t[conf.num];
-//
-//            for(int b=0;b<nx*ny*nz;b++){
-//                int64ToBytes_bigEndian(tail_repos, reposlist[b].size());
-//                tail_repos += 8;
-//            }
-//
-//            pos=0;
-//            for(int b=0;b<nx*ny*nz;b++){
-//                for(size_t it:reposlist[b]) poslist[pos++]=it;
-//            }
-//
-//            encoder.preprocess_encode(poslist, conf.num, 0);
-//            encoder.save(tail_repos);
-//            encoder.encode(poslist, conf.num, tail_repos);
-//
-//            delete[] poslist;
+                    encoder.preprocess_encode(repos, conf.num, 0, 0x01);
+                    encoder.save(tail_data);
+                    encoder.encode(repos, conf.num, tail_data);
 
-#if __OUTPUT_INFO
-            printf("size of repos = %.2lf MB, %zu bytes\n", 1. * (tail_data - ptail_data) / 1024 / 1024, tail_data - ptail_data);
-            size_t cmpreposSize;
-            delete[] lossless.compress(ptail_data, tail_data - ptail_data, cmpreposSize);
-            printf("size of compressed repos = %.2lf MB, %zu bytes\n", 1. * cmpreposSize / 1024 / 1024, cmpreposSize);
-            ptail_data = tail_data;
-#endif
+                    break;
+                }
+
+                case NOT_SPECIFIED: {
+
+                    if (bx * by * bz > (1llu << 48)) {
+
+                        encoder.preprocess_encode(repos, conf.num, 0, 0x01);
+                        encoder.save(tail_data);
+                        encoder.encode(repos, conf.num, tail_data);
+
+                        *reposMethod_ptr = FIX_LENGTH;
+
+                        break;
+                    }
+
+                    uchar *bytes_repos = new uchar[std::max(conf.num *
+                                                            std::max((size_t) 4,
+                                                                     (size_t) ceil(log2(1. * bx * by * bz) / 4.)),
+                                                            (size_t) (1 << 16))], *tail_repos = bytes_repos;
+                    vtail_data = tail_data;
+
+                    encoder.preprocess_encode(repos, conf.num, 0, 0x00);
+                    encoder.save(vtail_data);
+                    encoder.encode(repos, conf.num, vtail_data);
+
+                    encoder.preprocess_encode(repos, conf.num, 0, 0x01);
+                    encoder.save(tail_repos);
+                    encoder.encode(repos, conf.num, tail_repos);
+
+                    size_t cmpSize0 = 0, cmpSize1 = 0;
+                    delete[] lossless.compress(tail_data, vtail_data - tail_data, cmpSize0);
+                    delete[] lossless.compress(bytes_repos, tail_repos - bytes_repos, cmpSize1);
+
+                    if (cmpSize0 < cmpSize1) {
+                        tail_data = vtail_data;
+                        *reposMethod_ptr = HUFFMAN;
+                    } else {
+                        write(bytes_repos, tail_repos - bytes_repos, tail_data);
+                        *reposMethod_ptr = FIX_LENGTH;
+                    }
+
+                    delete[] bytes_repos;
+
+                    break;
+                }
+
+                default: {
+                    exit(-1);
+                }
+            };
 
             delete[] repos;
-            if (bytes_repos != nullptr) delete[] bytes_repos;
 
-#if __OUTPUT_INFO
+            if (encodingMethodsCacheUpdate) {
 
-            printf("begin merge\n");
-
-#endif
-
-#if __OUTPUT_INFO
-
-            printf("end merge\n");
-
-#endif
+                encodingMethodsCache.write(conf.absErrorBound, bx, by, bz);
+            }
 
 #if !__soft_eb
             {
