@@ -201,7 +201,7 @@ namespace SZ3 {
 
         void
         getSample(T *datax, T *datay, T *dataz, T *samplex, T *sampley, T *samplez, T px, T py, T pz, T rx, T ry, T rz,
-                  size_t n, size_t &_, size_t b = 3) {
+                  size_t n, size_t &_, size_t b = 7) {
 
 //            static std::unordered_set<size_t> selectedIndices;
 ////            std::random_device rd;
@@ -277,7 +277,7 @@ namespace SZ3 {
 //            return {16, 16, 16};
 
             if (rx > 1e6 || ry > 1e6 || rz > 1e6) return {0, 0, 0};
-            if (conf.absErrorBound < 1e-6) return {0, 0, 0};
+//            if (conf.absErrorBound < 1e-6) return {0, 0, 0};
             if (rx / conf.absErrorBound >= (1llu << 32) || ry / conf.absErrorBound >= (1llu << 32) ||
                 rz / conf.absErrorBound >= (1llu << 32))
                 return {0, 0, 0};
@@ -892,6 +892,9 @@ namespace SZ3 {
 #endif
 
             EncodingMethod *encodingMethods  = encodingMethodsCache.get(conf.absErrorBound, bx, by, bz);
+//            EncodingMethod encodingMethodsArray[4] = {HUFFMAN, HUFFMAN, HUFFMAN, HUFFMAN};
+//            EncodingMethod encodingMethodsArray[4] = {FIX_LENGTH, FIX_LENGTH, FIX_LENGTH, FIX_LENGTH};
+//            EncodingMethod *encodingMethods = &encodingMethodsArray[0];
             EncodingMethod *blkstMethod_ptr  = &encodingMethods[0];
             EncodingMethod *blkcntMethod_ptr = &encodingMethods[1];
             EncodingMethod *quadsMethod_ptr  = &encodingMethods[2];
@@ -964,10 +967,10 @@ namespace SZ3 {
 
 #if __OUTPUT_INFO
 
-            printf("size of blkst = %.2lf MB, %zu bytes\n", 1. * (tail_data - ptail_data) / 1024 / 1024, tail_data - ptail_data);
+            printf("size of blkst = %.2lf MB, %.2lf KB, %zu bytes\n", 1. * (tail_data - ptail_data) / 1024 / 1024, 1. * (tail_data - ptail_data) / 1024, tail_data - ptail_data);
             size_t cmpblkstSize;
             delete[] lossless.compress(ptail_data, tail_data - ptail_data, cmpblkstSize);
-            printf("size of compressed blkst = %.2lf MB, %zu bytes\n", 1. * cmpblkstSize / 1024 / 1024, cmpblkstSize);
+            printf("size of compressed blkst = %.2lf MB, %.2lf KB, %zu bytes\n", 1. * cmpblkstSize / 1024 / 1024, 1. * cmpblkstSize / 1024, cmpblkstSize);
             ptail_data = tail_data;
 
 #endif
@@ -1169,6 +1172,16 @@ namespace SZ3 {
             };
 
             delete[] repos;
+
+#if __OUTPUT_INFO
+
+            printf("size of repos = %.2lf MB, %.2lf KB, %zu bytes\n", 1. * (tail_data - ptail_data) / 1024 / 1024, 1. * (tail_data - ptail_data) / 1024, tail_data - ptail_data);
+            size_t cmpreposSize;
+            delete[] lossless.compress(ptail_data, tail_data - ptail_data, cmpreposSize);
+            printf("size of compressed repos = %.2lf MB, %.2lf KB, %zu bytes\n", 1. * cmpreposSize / 1024 / 1024, 1. * cmpreposSize / 1024, cmpreposSize);
+            ptail_data = tail_data;
+
+#endif
 
             if (encodingMethodsCacheUpdate) {
 
@@ -2244,7 +2257,7 @@ namespace SZ3 {
                     cnt += isSpatialWorse(conf, datax + t * n, datay + t * n, dataz + t * n);
                     blockSizeCache.init();
                     if (cnt > 1) {
-                        fflag = 6.4;
+                        fflag = 5;
                     }
                 }
             }
@@ -2269,45 +2282,45 @@ namespace SZ3 {
             size_t *ord1 = new size_t[n];
             int cnt1 = -1;
 
-            if (fflagInit > 1) {
-
-            } else if (fflag > 1) {
-                double l = 1, r = 24, midl, midr;
-                size_t size_midl, size_midr;
-                Config confSliceTest = Config(std::min(std::min(bt * 4, n > (1 << 20) ? (size_t) 16 : (size_t) 64), nt),
-                                              n);
-                confSliceTest.absErrorBound = conf.absErrorBound;
-                while (r - l > 1) {
-                    midl = (l + l + r) / 3.;
-                    midr = (l + r + r) / 3.;
-
-                    compressTemporalPredictionOnSlice(confSliceTest, datax, datay, dataz, size_midl, nullptr,
-                                                      blkflag, bx, by, bz, bytes1, compressed_size1, decmpdata1, ord1, midl);
-                    delete[] bytes1;
-                    bytes1 = nullptr;
-                    compressed_size1 = 0;
-                    size_midl += compressed_size1;
-                    blockSizeCache.init();
-                    isTpCacheBatch.init();
-
-                    compressTemporalPredictionOnSlice(confSliceTest, datax, datay, dataz, size_midr, nullptr,
-                                                      blkflag, bx, by, bz, bytes1, compressed_size1, decmpdata1, ord1, midr);
-                    delete[] bytes1;
-                    bytes1 = nullptr;
-                    compressed_size1 = 0;
-                    size_midr += compressed_size1;
-                    blockSizeCache.init();
-                    isTpCacheBatch.init();
-//                    printf("l:[%.2f, %zu], r:[%.2f, %zu]\n", midl, size_midl, midr, size_midr);
-
-                    if (size_midl < size_midr) {
-                        r = midr;
-                    } else {
-                        l = midl;
-                    }
-                }
-                fflag = (l + r) / 2;
-            }
+//            if (fflagInit > 1) {
+//
+//            } else if (fflag > 1) {
+//                double l = 1, r = 24, midl, midr;
+//                size_t size_midl, size_midr;
+//                Config confSliceTest = Config(std::min(std::min(bt * 4, n > (1 << 20) ? (size_t) 16 : (size_t) 64), nt),
+//                                              n);
+//                confSliceTest.absErrorBound = conf.absErrorBound;
+//                while (r - l > 1) {
+//                    midl = (l + l + r) / 3.;
+//                    midr = (l + r + r) / 3.;
+//
+//                    compressTemporalPredictionOnSlice(confSliceTest, datax, datay, dataz, size_midl, nullptr,
+//                                                      blkflag, bx, by, bz, bytes1, compressed_size1, decmpdata1, ord1, midl);
+//                    delete[] bytes1;
+//                    bytes1 = nullptr;
+//                    compressed_size1 = 0;
+//                    size_midl += compressed_size1;
+//                    blockSizeCache.init();
+//                    isTpCacheBatch.init();
+//
+//                    compressTemporalPredictionOnSlice(confSliceTest, datax, datay, dataz, size_midr, nullptr,
+//                                                      blkflag, bx, by, bz, bytes1, compressed_size1, decmpdata1, ord1, midr);
+//                    delete[] bytes1;
+//                    bytes1 = nullptr;
+//                    compressed_size1 = 0;
+//                    size_midr += compressed_size1;
+//                    blockSizeCache.init();
+//                    isTpCacheBatch.init();
+////                    printf("l:[%.2f, %zu], r:[%.2f, %zu]\n", midl, size_midl, midr, size_midr);
+//
+//                    if (size_midl < size_midr) {
+//                        r = midr;
+//                    } else {
+//                        l = midl;
+//                    }
+//                }
+//                fflag = (l + r) / 2;
+//            }
 
 //            printf("fflag = %.6lf\n", fflag);
 
