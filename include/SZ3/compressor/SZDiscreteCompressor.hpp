@@ -1487,7 +1487,7 @@ namespace SZ3 {
             getTPArray1D(datay, predDatay, erry, quantizer, n);
             getTPArray1D(dataz, predDataz, errz, quantizer, n);
 
-            uchar *bytes = new uchar[std::max(n * 12, (size_t) 1 << 16)], *tail = bytes;
+            uchar *bytes = new uchar[std::max(n * 16, (size_t) 1 << 16)], *tail = bytes;
 //            size_t *err = new size_t[n * 3];
 //            memcpy(err, errx, n * sizeof(size_t));
 //            memcpy(err + n, erry, n * sizeof(size_t));
@@ -1522,7 +1522,7 @@ namespace SZ3 {
             getTPArray1DOverwrite(datay, predDatay, erry, quantizer, n);
             getTPArray1DOverwrite(dataz, predDataz, errz, quantizer, n);
 
-            uchar *bytes = new uchar[std::max(n * 12, (size_t) 1 << 16)], *tail = bytes;
+            uchar *bytes = new uchar[std::max(n * 16, (size_t) 1 << 16)], *tail = bytes;
 //            size_t *err = new size_t[n * 3];
 //            memcpy(err, errx, n * sizeof(size_t));
 //            memcpy(err + n, erry, n * sizeof(size_t));
@@ -1556,7 +1556,7 @@ namespace SZ3 {
         size_t getTPEstimateSize(T *datax, T *datay, T *dataz, T *predDatax, T *predDatay, T *predDataz,
                                  LinearQuantizer<T> &quantizer, size_t n) {
             size_t *err = new size_t[3 * n], *errx = err, *erry = errx + n, *errz = erry + n;
-            uchar *bytes = new uchar[12 * n + (1 << 10)], *tail = bytes;
+            uchar *bytes = new uchar[16 * n + (1 << 10)], *tail = bytes;
 
             std::vector<T> unpred;
             for (size_t i = 0; i < n; i++) {
@@ -1923,7 +1923,7 @@ namespace SZ3 {
                 for (size_t i = 0; i < n; i++) nowpy[i] = datay[t * n + p[i]];
                 for (size_t i = 0; i < n; i++) nowpz[i] = dataz[t * n + p[i]];
 
-                size_t cmpSizeT = getTPEstimateSize(nowpx, nowpy, nowpz, prepx, prepy, prepz, quantizer, n);
+//                size_t cmpSizeT = getTPEstimateSize(nowpx, nowpy, nowpz, prepx, prepy, prepz, quantizer, n);
 //                if (compressed_size < cmpSizeT) {
 ////                if (true) {
 //
