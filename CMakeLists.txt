@@ -23,7 +23,8 @@ find_package(PkgConfig)
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/include/SZ3/version.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/include/SZ3/version.hpp)
 
-add_library(${PROJECT_NAME} INTERFACE)
+add_library(${PROJECT_NAME} INTERFACE
+        include/SZ3/compressor/SZLCPTreeCompressor.hpp)
 target_include_directories(
         ${PROJECT_NAME} INTERFACE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -67,6 +68,7 @@ if (GSL_FOUND)
 endif ()
 
 add_subdirectory(tools/sz3)
+add_subdirectory(tools/lcp)
 add_subdirectory(tools/sz3c)
 
 
