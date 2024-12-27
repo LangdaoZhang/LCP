@@ -83,17 +83,108 @@ namespace SZ3 {
             qrange[2] = (rz - lz) / (conf.absErrorBound * 2);
         }
 
-        static const size_t numblockPointLimit = 64;
+        size_t ceildiv(size_t a, size_t b) {
+            return (a + b - 1) / b;
+        }
 
-        uchar selectAxis(Point *l, Point *r, uchar last_axis) {
+        uchar selectAxis(const Point *l, const Point *r, const std::array<size_t, 6> &range, uchar last_axis) {
             return (last_axis + 1) % 3;
+            uchar best_axis = 0;
+            int64_t best_num = 0;
+            for (uchar axis = 0; axis < 3; axis++) {
+                size_t pivot = range[axis * 2] + (range[axis * 2 + 1] - range[axis * 2]) / 2;
+                int64_t num = 0;
+                for (auto it = l; it < r; it++) {
+                    if ((*it)[axis] < pivot) {
+                        num++;
+                    }
+                    else{
+                        num--;
+                    }
+                }
+                num = abs(num);
+                if (num > best_num) {
+                    best_num = num;
+                    best_axis = axis;
+                }
+            }
+            return best_axis;
         }
 
-        std::pair<uchar *, size_t> compressLCP(Point *l, Point *r) {
-            return {nullptr, 0};
+        void compressLCP(Point *l, Point *r, std::array<size_t, 6> range) {
+
+            class NodeWithOrder {
+            public:
+                explicit NodeWithOrder(size_t id, size_t reid, size_t ord) :
+                id(id), reid(reid), ord(ord) {}
+                size_t id, reid, ord;
+            };
+
+            std::array<size_t, 3> b = {1, 1, 1};
+            size_t &bx = b[0], &by = b[1], &bz = b[2];
+
+            size_t &lx = range[0], &rx = range[1];
+            size_t &ly = range[2], &ry = range[3];
+            size_t &lz = range[4], &rz = range[5];
+            size_t nx = ceildiv(rx - lx, bx), ny = ceildiv(ry - ly, by), nz = ceildiv(rz - lz, bz);
+
+            std::vector<NodeWithOrder> vec;
+            vec.reserve(r - l);
+
+            for (auto it = l; it < r; it++) {
+                size_t x = (*it)[0] - lx;
+                size_t cx = x / bx;
+                size_t dx = x % bx;
+
+                size_t y = (*it)[1] - ly;
+                size_t cy = y / by;
+                size_t dy = y % by;
+
+                size_t z = (*it)[2] - lz;
+                size_t cz = z / bz;
+                size_t dz = z % bz;
+
+                vec.push_back(NodeWithOrder(cx + cy * nx + cz * nx * ny, dx + dy * bx + dz * bx * by, 0));
+            }
+
+            std::sort(vec.begin(), vec.end(), [](const NodeWithOrder &u, const NodeWithOrder &v) {
+                return u.id < v.id;
+            });
+
+            size_t i = -1;
+            size_t j = 0;
+            size_t n = r - l;
+            size_t pre = -1;
+
+            for (; j < n; j++) {
+                size_t &id = vec[j].id;
+                size_t reid = vec[j].reid;
+
+                if (vec[j].id != pre) {
+                    blkst.push_back(id - pre);
+                    blkcnt.push_back(0);
+                    pre = id;
+                }
+                ++*blkcnt.rbegin();
+
+                repos.push_back(reid);
+            }
+
         }
 
-        void compressTreeSplitting(Point *l, Point *r, const std::array<size_t, 3> &qrange) {
+        /*
+         * TODO: Find a method to determine the value of numblockPointLimit
+         */
+        size_t getNumBlockPointLimit() {
+            return 1024;
+        }
+
+        void compressTreeSplitting(Point *l, Point *r, const std::array<size_t, 3> &qrange, uchar *&tail) {
+
+            size_t n = r - l;
+            blkst.reserve(n);
+            blkcnt.reserve(n);
+            repos.reserve(n);
 
             class Status {
             public:
@@ -129,6 +220,9 @@ namespace SZ3 {
                 const uchar axis;
             };
 
+            numblockPointLimit = getNumBlockPointLimit();
+            printf("numblockPointLimit = %zu\n", numblockPointLimit);
+
             std::stack<Status> stk;
 
             stk.push(Status(l, r, 3 - 1, {0, qrange[0] + 1, 0, qrange[1] + 1, 0, qrange[2] + 1}));
@@ -140,18 +234,18 @@ namespace SZ3 {
                 l = current_status.l;
                 r = current_status.r;
                 size_t num_remaining_points = static_cast<size_t>(r - l);
+                auto &current_range = current_status.range;
 
                 if (num_remaining_points < numblockPointLimit) {
-                    clusters.push_back(compressLCP(l, r));
+                    compressLCP(l, r, current_range);
                     continue;
                 }
 
                 auto &current_axis = current_status.last_axis;
-                auto &current_range = current_status.range;
-                auto next_axis = selectAxis(l, r, current_axis);
+                auto next_axis = selectAxis(l, r, current_range, current_axis);
 
                 if (current_range[next_axis * 2 + 1] - current_range[next_axis * 2] <= 4) {
-                    clusters.push_back(compressLCP(l, r));
+                    compressLCP(l, r, current_range);
                     continue;
                 }
 
@@ -169,11 +263,29 @@ namespace SZ3 {
                 stk.push(Status(l, mid, next_axis, current_range));
 
             }
+
+            encoder.preprocess_encode(tree_nums, 0);
+            encoder.encode(tree_nums, tail);
+            encoder.postprocess_encode();
+
+            encoder.preprocess_encode(blkst, 0);
+            encoder.encode(blkst, tail);
+            encoder.postprocess_encode();
+
+            encoder.preprocess_encode(blkcnt, 0);
+            encoder.encode(blkcnt, tail);
+            encoder.postprocess_encode();
+
+            encoder.preprocess_encode(repos, 0);
+            encoder.encode(repos, tail);
+            encoder.postprocess_encode();
         }
 
         uchar *compress(const Config &conf, T *datax, T *datay, T *dataz, size_t &compressed_size,
                         size_t *ord = nullptr) {
             const size_t &n = conf.num;
+//            numblockPointLimit = pow(n, .75);
+//            printf("numblockPointLimit = %zu\n", numblockPointLimit);
 
             uchar *head = new uchar[n * 16], *tail = head;
             Point *p = new Point[n];
@@ -183,30 +295,21 @@ namespace SZ3 {
             getRangeQuantizePoints(conf, datax, datay, dataz, range, qrange, p);
             write(range.begin(), 6 * sizeof(T), tail);
 
-            compressTreeSplitting(p, p + n, qrange);
+            compressTreeSplitting(p, p + n, qrange, tail);
+            delete[] p;
 
-            encoder.preprocess_encode(tree_nums, 0);
-            encoder.encode(tree_nums, tail);
-            encoder.postprocess_encode();
-//            for (auto &num : tree_nums) {
-//                printf("%lld\n", num);
-//            }
-
-            for(auto &cluster : clusters) {
-                write(cluster.first, cluster.second, tail);
-            }
-
-            compressed_size = static_cast<size_t>(tail - head);
+            uchar *lossless_data = lossless.compress(head, tail - head, compressed_size);
 
             printf("compressed_size = %zu\n", compressed_size);
 
-            return head;
+            return lossless_data;
         }
 
     private:
+        size_t numblockPointLimit = 1024;
+
         std::vector<int64_t> tree_nums;
-//        std::vector<uchar> tree_axis;
-        std::vector<std::pair<uchar *, size_t>> clusters;
+        std::vector<int64_t> blkst, blkcnt, repos;
 
         Encoder encoder;
         Lossless lossless;
