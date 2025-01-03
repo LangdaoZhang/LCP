@@ -122,8 +122,7 @@ namespace SZ3 {
 
         }
 
-
-        void save(unsigned char *&c) {
+        void save(unsigned char *&c) const {
             write(N, c);
             write(dims.data(), dims.size(), c);
             write(num, c);
