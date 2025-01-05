@@ -225,11 +225,11 @@ namespace SZ3 {
             class Status {
             public:
 
-                explicit Status(Point *l, Point *r, uint8_t depth, uchar last_axis, std::array<size_t, 6> &&range, size_t index_offset) :
-                    l(l), r(r), depth(depth), last_axis(last_axis), range(range), index_offset(index_offset) {
+                explicit Status(Point *l, Point *r, uint8_t depth, uchar last_axis, std::array<size_t, 6> &&range, size_t index_offset, std::string &&cluster) :
+                    l(l), r(r), depth(depth), last_axis(last_axis), range(range), index_offset(index_offset), cluster(std::move(cluster)) {
                 }
-                explicit Status(Point *l, Point *r, uint8_t depth, uchar last_axis, std::array<size_t, 6> &range, size_t index_offset) :
-                    l(l), r(r), depth(depth), last_axis(last_axis), range(range), index_offset(index_offset) {
+                explicit Status(Point *l, Point *r, uint8_t depth, uchar last_axis, std::array<size_t, 6> &range, size_t index_offset, std::string &&cluster) :
+                    l(l), r(r), depth(depth), last_axis(last_axis), range(range), index_offset(index_offset), cluster(std::move(cluster)) {
                 }
 
                 Point *l, *r;
@@ -237,6 +237,7 @@ namespace SZ3 {
                 uchar last_axis;
                 std::array<size_t, 6> range;
                 size_t index_offset;
+                std::string cluster;
                 /*
                  * l, r are the start and end of the current point set
                  * range is the range of the current point set
@@ -263,7 +264,7 @@ namespace SZ3 {
 
             std::stack<Status> stk;
 
-            stk.push(Status(l, r, 0, 3 - 1, {0, qrange[0] + 1, 0, qrange[1] + 1, 0, qrange[2] + 1}, 0));
+            stk.push(Status(l, r, 0, 3 - 1, {0, qrange[0] + 1, 0, qrange[1] + 1, 0, qrange[2] + 1}, 0, "#"));
 
             while(!stk.empty()) {
                 Status current_status = std::move(stk.top());
@@ -272,6 +273,8 @@ namespace SZ3 {
                 l = current_status.l;
                 r = current_status.r;
                 uint8_t depth = current_status.depth;
+                std::string &cluster = current_status.cluster;
+//                writePointsCSV(l, r, cluster);
                 size_t num_remaining_points = static_cast<size_t>(r - l);
                 auto &current_range = current_status.range;
                 size_t &current_index_offset = current_status.index_offset;
@@ -299,10 +302,10 @@ namespace SZ3 {
 
                 size_t current_range_next_axis_l = current_range[next_axis * 2];
                 current_range[next_axis * 2] = pivot;
-                stk.push(Status(mid, r, depth + 1, next_axis, current_range, current_index_offset + mid - l));
+                stk.push(Status(mid, r, depth + 1, next_axis, current_range, current_index_offset + mid - l, cluster + "1"));
                 current_range[next_axis * 2] = current_range_next_axis_l;
                 current_range[next_axis * 2 + 1] = pivot;
-                stk.push(Status(l, mid, depth + 1, next_axis, current_range, current_index_offset));
+                stk.push(Status(l, mid, depth + 1, next_axis, current_range, current_index_offset, cluster + "0"));
 
             }
 
@@ -531,6 +534,19 @@ namespace SZ3 {
             read(vec_length, cmpData);
             encoder.load(cmpData, remaining_length);
             vec = std::move(encoder.decode(cmpData, vec_length));
+        }
+
+        void writePointsCSV(Point *l, Point *r, std::string filename) {
+            static const std::string path = "/Users/longtaozhang/tem/";
+            filename = path + filename + ".csv";
+            std::ofstream file(filename);
+            if (!file.is_open()) {
+                std::cerr << "Failed to open file:" + filename << std::endl;
+                exit(1);
+            }
+            for (auto it = l; it < r; it++) {
+                file << (*it)[0] << "," << (*it)[1] << "," << (*it)[2] << std::endl;
+            }
         }
     };
 
