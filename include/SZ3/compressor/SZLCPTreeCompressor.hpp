@@ -116,7 +116,7 @@ namespace SZ3 {
             return (last_axis + 1) % 3;
         }
 
-        void compressLCP(Point *l, Point *r, std::array<size_t, 6> range, const size_t &index_offset, size_t *ord = nullptr) {
+        void compressLCP(Point *l, Point *r, uint8_t depth, std::array<size_t, 6> range, const size_t &index_offset, size_t *ord = nullptr) {
 
             if(l == r) return;
             size_t stateNum = (range[1] - range[0]) * (range[3] - range[2]) * (range[5] - range[4]);
@@ -162,6 +162,17 @@ namespace SZ3 {
                 return u.id < v.id;
             });
 
+            if(maximum_depth < depth) {
+                ++maximum_depth;
+                blkst.resize(depth + 1);
+                blkcnt.resize(depth + 1);
+                repos.resize(depth + 1);
+            }
+
+            auto &current_blkst = blkst[depth];
+            auto &current_blkcnt = blkcnt[depth];
+            auto &current_repos = repos[depth];
+
             size_t i = -1;
             size_t j = 0;
             size_t n = r - l;
@@ -172,13 +183,13 @@ namespace SZ3 {
                 size_t reid = vec[j].reid;
 
                 if (vec[j].id != pre) {
-                    blkst.push_back(id - pre);
-                    blkcnt.push_back(0);
+                    current_blkst.push_back(id - pre);
+                    current_blkcnt.push_back(0);
                     pre = id;
                 }
-                ++*blkcnt.rbegin();
+                ++*current_blkcnt.rbegin();
 
-                repos.push_back(reid);
+                current_repos.push_back(reid);
             }
             if (ord != nullptr) {
                 for (size_t i = 0; i < n; i++) {
@@ -206,21 +217,23 @@ namespace SZ3 {
         void compressTreeSplitting(Point *l, Point *r, const std::array<size_t, 3> &qrange, uchar *&tail, size_t *ord = nullptr) {
 
             size_t n = r - l;
-            blkst.reserve(n);
-            blkcnt.reserve(n);
-            repos.reserve(n);
+            maximum_depth = 0;
+            blkst.reserve(32);
+            blkcnt.reserve(32);
+            repos.reserve(32);
 
             class Status {
             public:
 
-                explicit Status(Point *l, Point *r, uchar last_axis, std::array<size_t, 6> &&range, size_t index_offset) :
-                    l(l), r(r), last_axis(last_axis), range(range), index_offset(index_offset) {
+                explicit Status(Point *l, Point *r, uint8_t depth, uchar last_axis, std::array<size_t, 6> &&range, size_t index_offset) :
+                    l(l), r(r), depth(depth), last_axis(last_axis), range(range), index_offset(index_offset) {
                 }
-                explicit Status(Point *l, Point *r, uchar last_axis, std::array<size_t, 6> &range, size_t index_offset) :
-                    l(l), r(r), last_axis(last_axis), range(range), index_offset(index_offset) {
+                explicit Status(Point *l, Point *r, uint8_t depth, uchar last_axis, std::array<size_t, 6> &range, size_t index_offset) :
+                    l(l), r(r), depth(depth), last_axis(last_axis), range(range), index_offset(index_offset) {
                 }
 
                 Point *l, *r;
+                uint8_t depth;
                 uchar last_axis;
                 std::array<size_t, 6> range;
                 size_t index_offset;
@@ -250,7 +263,7 @@ namespace SZ3 {
 
             std::stack<Status> stk;
 
-            stk.push(Status(l, r, 3 - 1, {0, qrange[0] + 1, 0, qrange[1] + 1, 0, qrange[2] + 1}, 0));
+            stk.push(Status(l, r, 0, 3 - 1, {0, qrange[0] + 1, 0, qrange[1] + 1, 0, qrange[2] + 1}, 0));
 
             while(!stk.empty()) {
                 Status current_status = std::move(stk.top());
@@ -258,12 +271,13 @@ namespace SZ3 {
 
                 l = current_status.l;
                 r = current_status.r;
+                uint8_t depth = current_status.depth;
                 size_t num_remaining_points = static_cast<size_t>(r - l);
                 auto &current_range = current_status.range;
                 size_t &current_index_offset = current_status.index_offset;
 
                 if (num_remaining_points < numblockPointLimit) {
-                    compressLCP(l, r, current_range, current_index_offset, ord);
+                    compressLCP(l, r, depth, current_range, current_index_offset, ord);
                     continue;
                 }
 
@@ -271,7 +285,7 @@ namespace SZ3 {
                 auto next_axis = selectAxis(l, r, current_range, current_axis);
 
                 if (current_range[next_axis * 2 + 1] - current_range[next_axis * 2] <= 4) {
-                    compressLCP(l, r, current_range, current_index_offset, ord);
+                    compressLCP(l, r, depth, current_range, current_index_offset, ord);
                     continue;
                 }
 
@@ -285,10 +299,10 @@ namespace SZ3 {
 
                 size_t current_range_next_axis_l = current_range[next_axis * 2];
                 current_range[next_axis * 2] = pivot;
-                stk.push(Status(mid, r, next_axis, current_range, current_index_offset + mid - l));
+                stk.push(Status(mid, r, depth + 1, next_axis, current_range, current_index_offset + mid - l));
                 current_range[next_axis * 2] = current_range_next_axis_l;
                 current_range[next_axis * 2 + 1] = pivot;
-                stk.push(Status(l, mid, next_axis, current_range, current_index_offset));
+                stk.push(Status(l, mid, depth + 1, next_axis, current_range, current_index_offset));
 
             }
 
@@ -301,23 +315,35 @@ namespace SZ3 {
             encoder.encode(tree_nums, tail);
             encoder.postprocess_encode();
 
-            write(blkst.size(), tail);
-            encoder.preprocess_encode(blkst.data(), repos.size(), 0, 0x01);
-            encoder.save(tail);
-            encoder.encode(blkst, tail);
-            encoder.postprocess_encode();
+            for (uint8_t depth = 0; depth <= maximum_depth; ++depth) {
 
-            write(blkcnt.size(), tail);
-            encoder.preprocess_encode(blkcnt, 0);
-            encoder.save(tail);
-            encoder.encode(blkcnt, tail);
-            encoder.postprocess_encode();
+                auto &current_blkst = blkst[depth];
+                auto &current_blkcnt = blkcnt[depth];
+                auto &current_repos = repos[depth];
 
-            write(repos.size(), tail);
-            encoder.preprocess_encode(repos.data(), repos.size(), 0, 0x01);
-            encoder.save(tail);
-            encoder.encode(repos, tail);
-            encoder.postprocess_encode();
+//                printf("depth = %u\n", depth);
+//                printf("current points number = %zu\n", current_repos.size());
+
+                if(current_blkst.empty()) continue;
+
+                write(current_blkst.size(), tail);
+                encoder.preprocess_encode(current_blkst.data(), current_blkst.size(), 0, 0x01);
+                encoder.save(tail);
+                encoder.encode(current_blkst, tail);
+                encoder.postprocess_encode();
+
+                write(current_blkcnt.size(), tail);
+                encoder.preprocess_encode(current_blkcnt, 0);
+                encoder.save(tail);
+                encoder.encode(current_blkcnt, tail);
+                encoder.postprocess_encode();
+
+                write(current_repos.size(), tail);
+                encoder.preprocess_encode(current_repos.data(), current_repos.size(), 0, 0x01);
+                encoder.save(tail);
+                encoder.encode(current_repos, tail);
+                encoder.postprocess_encode();
+            }
         }
 
         uchar *compress(const Config &conf, T *datax, T *datay, T *dataz, size_t &compressed_size,
@@ -484,7 +510,8 @@ namespace SZ3 {
         size_t numblockPointLimit = 1024;
 
         std::vector<int64_t> tree_nums;
-        std::vector<int64_t> blkst, blkcnt, repos;
+        uint8_t maximum_depth;
+        std::vector<std::vector<int64_t>> blkst, blkcnt, repos;
 
         Encoder encoder;
         Lossless lossless;
