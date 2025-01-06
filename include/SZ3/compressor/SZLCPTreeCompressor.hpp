@@ -90,26 +90,26 @@ namespace SZ3 {
 
         uchar selectAxis(const Point *l, const Point *r, const std::array<size_t, 6> &range, uchar last_axis) {
             return (last_axis + 1) % 3;
-            uchar best_axis = 0;
-            int64_t best_num = 0;
-            for (uchar axis = 0; axis < 3; axis++) {
-                size_t pivot = range[axis * 2] + (range[axis * 2 + 1] - range[axis * 2]) / 2;
-                int64_t num = 0;
-                for (auto it = l; it < r; it++) {
-                    if ((*it)[axis] < pivot) {
-                        num++;
-                    }
-                    else{
-                        num--;
-                    }
-                }
-                num = abs(num);
-                if (num > best_num) {
-                    best_num = num;
-                    best_axis = axis;
-                }
-            }
-            return best_axis;
+//            uchar best_axis = 0;
+//            int64_t best_num = 0;
+//            for (uchar axis = 0; axis < 3; axis++) {
+//                size_t pivot = range[axis * 2] + (range[axis * 2 + 1] - range[axis * 2]) / 2;
+//                int64_t num = 0;
+//                for (auto it = l; it < r; it++) {
+//                    if ((*it)[axis] < pivot) {
+//                        num++;
+//                    }
+//                    else{
+//                        num--;
+//                    }
+//                }
+//                num = abs(num);
+//                if (num > best_num) {
+//                    best_num = num;
+//                    best_axis = axis;
+//                }
+//            }
+//            return best_axis;
         }
 
         uchar selectAxis(uchar last_axis) {
@@ -163,7 +163,7 @@ namespace SZ3 {
             });
 
             if(maximum_depth < depth) {
-                ++maximum_depth;
+                maximum_depth = depth;
                 blkst.resize(depth + 1);
                 blkcnt.resize(depth + 1);
                 repos.resize(depth + 1);
@@ -203,7 +203,7 @@ namespace SZ3 {
          * TODO: Find a method to determine the value of numblockPointLimit
          */
         size_t getNumBlockPointLimit() {
-            return 1024;
+            return 1;
         }
 
         /*
@@ -217,10 +217,12 @@ namespace SZ3 {
         void compressTreeSplitting(Point *l, Point *r, const std::array<size_t, 3> &qrange, uchar *&tail, size_t *ord = nullptr) {
 
             size_t n = r - l;
+            tree_nums.reserve(n);
+            tree_nums_bits.reserve(n);
             maximum_depth = 0;
-            blkst.reserve(32);
-            blkcnt.reserve(32);
-            repos.reserve(32);
+            blkst.reserve(64);
+            blkcnt.reserve(64);
+            repos.reserve(64);
 
             class Status {
             public:
@@ -290,12 +292,14 @@ namespace SZ3 {
                 }
 
                 size_t pivot = current_range[next_axis * 2] +
-                        (current_range[next_axis * 2 + 1] - current_range[next_axis * 2]) / 2;
-//                    largestPowerOf2LessThan(current_range[next_axis * 2 + 1] - current_range[next_axis * 2]);
+//                        (current_range[next_axis * 2 + 1] - current_range[next_axis * 2]) / 2;
+                    largestPowerOf2LessThan(current_range[next_axis * 2 + 1] - current_range[next_axis * 2]);
                 Point *mid = std::partition(l, r, Splitter(next_axis, pivot));
                 int64_t weight_difference = static_cast<int64_t>(r - mid) - static_cast<int64_t>(mid - l);
 
                 tree_nums.push_back(weight_difference);
+                uint8_t current_tree_nums_bits = ceil(log2(r - l));
+                tree_nums_bits.push_back(current_tree_nums_bits);
 
                 size_t current_range_next_axis_l = current_range[next_axis * 2];
                 current_range[next_axis * 2] = pivot;
@@ -309,11 +313,18 @@ namespace SZ3 {
             write(numblockPointLimit, tail);
 
             printf("tree_nums.size() = %zu\n", tree_nums.size());
-            write(tree_nums.size(), tail);
-            encoder.preprocess_encode(tree_nums, 0);
-            encoder.save(tail);
-            encoder.encode(tree_nums, tail);
-            encoder.postprocess_encode();
+//            write(tree_nums.size(), tail);
+//            encoder.preprocess_encode(tree_nums.data(), tree_nums.size(), 0, 0x00);
+//            encoder.save(tail);
+//            encoder.encode(tree_nums, tail);
+//            encoder.postprocess_encode();
+
+            uchar mask = 0x00, index = 0;
+            assert(tree_nums.size() == tree_nums_bits.size());
+            for (size_t i = 0; i < tree_nums.size(); i++) {
+                writeBytes(tail, tree_nums[i], tree_nums_bits[i], mask, index);
+            }
+            writeBytesClearMask(tail, mask, index);
 
             for (uint8_t depth = 0; depth <= maximum_depth; ++depth) {
 
@@ -510,6 +521,7 @@ namespace SZ3 {
         size_t numblockPointLimit = 1024;
 
         std::vector<int64_t> tree_nums;
+        std::vector<uint8_t> tree_nums_bits;
         uint8_t maximum_depth;
         std::vector<std::vector<int64_t>> blkst, blkcnt, repos;
 
