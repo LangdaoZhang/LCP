@@ -32,15 +32,15 @@ uchar *compressWithoutAllocateMemory(T *datax, T *datay, T *dataz, const SZ3::Co
     return bytes;
 }
 
-//template<typename T>
-//void decompressWithoutAllocatedMemory(const uchar *cmpData, T *&datax, T *&datay, T *&dataz, size_t &n, size_t cmpSize) {
-//
-//    SZ3::SZLCPTreeCompressor<T, SZ3::HuffmanEncoder<int64_t>, SZ3::Lossless_zstd> compressor =
-//            SZ3::SZLCPTreeCompressor<T, SZ3::HuffmanEncoder<int64_t>, SZ3::Lossless_zstd>(
-//            SZ3::HuffmanEncoder<int64_t>(), SZ3::Lossless_zstd());
-//
-//    compressor.decompress(cmpData, datax, datay, dataz, n, cmpSize);
-//}
+template<typename T>
+void decompressWithoutAllocatedMemory(const uchar *cmpData, T *&datax, T *&datay, T *&dataz, size_t &n, size_t cmpSize) {
+
+    SZ3::SZLCPTreeCompressor<T, SZ3::HuffmanEncoder<int64_t>, SZ3::Lossless_zstd> compressor =
+            SZ3::SZLCPTreeCompressor<T, SZ3::HuffmanEncoder<int64_t>, SZ3::Lossless_zstd>(
+            SZ3::HuffmanEncoder<int64_t>(), SZ3::Lossless_zstd());
+
+    compressor.decompress(cmpData, datax, datay, dataz, n, cmpSize);
+}
 
 template<class T>
 T *readFile(char *inPath[], size_t num_inPath, size_t n) {
@@ -63,6 +63,16 @@ void deleteData(T *datax, T *datay, T *dataz, size_t n) {
 
 template<class T>
 void sortAndVerify(T *a, T *b, size_t *ord, size_t n, std::string str) {
+
+//    std::set<size_t> st;
+//    for(size_t i=0;i<n;i++) st.insert(ord[i]);
+//    if(*st.begin() == 0 && *st.rbegin() == n-1 && st.size() == n){
+//        printf("is a permutation\n");
+//    }
+//    else{
+//        printf("not a permutation\n");
+//        printf("min = %zu, max = %zu\n", *st.begin(), *st.rbegin());
+//    }
 
     T *c = new T[n];
 
@@ -106,36 +116,36 @@ void compress(char *inPath[], char *cmpPath, const SZ3::Config &conf, T *oridata
     printf("compressed data file = %s\n", cmpPath);
 }
 
-//template<typename T>
-//void decompress(char *outPath[], char *cmpPath, T *oridata = nullptr, size_t *ord = nullptr) {
-//
-//    size_t cmpSize;
-//    const auto cmpData = SZ3::readfile<uchar>(cmpPath, cmpSize);
-//    const uchar *tailData = cmpData.get();
-//
-//    size_t n;
-//    T *datax = nullptr, *datay = nullptr, *dataz = nullptr;
-//
-//    SZ3::Timer timer(true);
-//
-//    decompressWithoutAllocatedMemory(tailData, datax, datay, dataz, n, cmpSize);
-//
-//    double compress_time = timer.stop();
-//
-//    if (oridata != nullptr && ord != nullptr) {
-//        sortAndVerify(oridata, datax, ord, n, "x");
-//        sortAndVerify(oridata + n, datay, ord, n, "y");
-//        sortAndVerify(oridata + n + n, dataz, ord, n, "z");
-//    }
-//
-//    SZ3::writefile(outPath[0], datax, n);
-//    SZ3::writefile(outPath[1], datay, n);
-//    SZ3::writefile(outPath[2], dataz, n);
-//
-//    deleteData(datax, datay, dataz, n);
-//
-//    printf("decompression time = %f\n", compress_time);
-//}
+template<typename T>
+void decompress(char *outPath[], char *cmpPath, T *oridata = nullptr, size_t *ord = nullptr) {
+
+    size_t cmpSize;
+    const auto cmpData = SZ3::readfile<uchar>(cmpPath, cmpSize);
+    const uchar *tailData = cmpData.get();
+
+    size_t n;
+    T *datax = nullptr, *datay = nullptr, *dataz = nullptr;
+
+    SZ3::Timer timer(true);
+
+    decompressWithoutAllocatedMemory(tailData, datax, datay, dataz, n, cmpSize);
+
+    double compress_time = timer.stop();
+
+    if (oridata != nullptr && ord != nullptr) {
+        sortAndVerify(oridata, datax, ord, n, "x");
+        sortAndVerify(oridata + n, datay, ord, n, "y");
+        sortAndVerify(oridata + n + n, dataz, ord, n, "z");
+    }
+
+    SZ3::writefile(outPath[0], datax, n);
+    SZ3::writefile(outPath[1], datay, n);
+    SZ3::writefile(outPath[2], dataz, n);
+
+    deleteData(datax, datay, dataz, n);
+
+    printf("decompression time = %f\n", compress_time);
+}
 
 signed main(int argc, char *argv[]) {
 
@@ -176,9 +186,9 @@ signed main(int argc, char *argv[]) {
             i += 3;
         } else if (strcmp(argv[i], "-osn") == 0) {
             // output same name
-            snprintf(outPath[0], 1024, "%s.lcp.out", inPath[0]);
-            snprintf(outPath[1], 1024, "%s.lcp.out", inPath[1]);
-            snprintf(outPath[2], 1024, "%s.lcp.out", inPath[2]);
+            snprintf(outPath[0], 1024, "%s.lcpt.out", inPath[0]);
+            snprintf(outPath[1], 1024, "%s.lcpt.out", inPath[1]);
+            snprintf(outPath[2], 1024, "%s.lcpt.out", inPath[2]);
             decmp = 0x01;
         } else if (strcmp(argv[i], "-eb") == 0) {
             assert(i + 1 < argc);
@@ -240,9 +250,9 @@ signed main(int argc, char *argv[]) {
         }
     }
 
-//    if (decmp == 0x01) {
-//        decompress<float>(outPath, cmpPath, oridata, ord);
-//    }
+    if (decmp == 0x01) {
+        decompress<float>(outPath, cmpPath, oridata, ord);
+    }
 
     return 0;
 }

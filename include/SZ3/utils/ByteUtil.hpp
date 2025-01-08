@@ -243,7 +243,7 @@ namespace SZ3 {
     template<typename T>
     inline void writeBytes(uchar *&c, T val, uchar len, uchar &mask, uchar &index) {
 
-        assert(len >= 1 && len <= sizeof(T) * 8);
+        assert(len >= 0 && len <= sizeof(T) * 8);
 
         if (len + index >= 8) {
 
@@ -272,6 +272,37 @@ namespace SZ3 {
         //     }
         //     val>>=1;
         // }
+    }
+
+    template<typename T>
+    inline T readBytes(const uchar *&c, uchar len, uchar &index) {
+
+        if (len == 0) return 0;
+
+        assert(len >= 0 && len <= sizeof(T) * 8);
+
+        T val = 0;
+        uchar buf = 0;
+
+        if (len + index >= 8) {
+
+            val |= (*c++) >> index;
+            len -= 8 - index;
+            buf += 8 - index;
+            index = 0;
+
+            while (len >= 8) {
+
+                val |= *c++ << buf;
+                len -= 8;
+                buf += 8;
+            }
+        }
+
+        val |= ((*c >> index) & ((0x01 << len) - 1)) << buf;
+        index += len;
+
+        return val;
     }
 
     inline void writeBytesByte(uchar *&c, uchar val) {
