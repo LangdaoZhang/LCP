@@ -290,10 +290,7 @@ namespace SZ3 {
                 auto next_axis = selectAxis(l, r, current_range, current_axis);
 
                 if (num_remaining_points < numblockPointLimit ||
-                    current_range[1] - current_range[0] <= 1 &&
-                    current_range[3] - current_range[2] <= 1 &&
-                    current_range[5] - current_range[4] <= 1
-                            ) {
+                    current_range[next_axis * 2 + 1] - current_range[next_axis * 2] <= 8) {
                     if (l < r) {
                         compressLCP(l, r, depth, current_range, current_index_offset, ord);
                     }
@@ -346,23 +343,23 @@ namespace SZ3 {
                  * write the LCP data
                  */
 
-//                write(current_blkst.size(), tail);
-//                encoder.preprocess_encode(current_blkst.data(), current_blkst.size(), 0, 0x01);
-//                encoder.save(tail);
-//                encoder.encode(current_blkst, tail);
-//                encoder.postprocess_encode();
-//
-//                write(current_blkcnt.size(), tail);
-//                encoder.preprocess_encode(current_blkcnt, 0);
-//                encoder.save(tail);
-//                encoder.encode(current_blkcnt, tail);
-//                encoder.postprocess_encode();
-//
-//                write(current_repos.size(), tail);
-//                encoder.preprocess_encode(current_repos.data(), current_repos.size(), 0, 0x01);
-//                encoder.save(tail);
-//                encoder.encode(current_repos, tail);
-//                encoder.postprocess_encode();
+                write(current_blkst.size(), tail);
+                encoder.preprocess_encode(current_blkst.data(), current_blkst.size(), 0, 0x01);
+                encoder.save(tail);
+                encoder.encode(current_blkst, tail);
+                encoder.postprocess_encode();
+
+                write(current_blkcnt.size(), tail);
+                encoder.preprocess_encode(current_blkcnt, 0);
+                encoder.save(tail);
+                encoder.encode(current_blkcnt, tail);
+                encoder.postprocess_encode();
+
+                write(current_repos.size(), tail);
+                encoder.preprocess_encode(current_repos.data(), current_repos.size(), 0, 0x01);
+                encoder.save(tail);
+                encoder.encode(current_repos, tail);
+                encoder.postprocess_encode();
             }
 
             /*
