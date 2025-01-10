@@ -219,9 +219,8 @@ namespace SZ3 {
         void compressTreeSplitting(Point *l, Point *r, const std::array<size_t, 3> &qrange, uchar *&tail, size_t *ord = nullptr) {
 
             size_t n = r - l;
-            tree_nums.resize(1024);
-            tree_nums_offset.resize(1024);
-            tree_nums_bits.resize(1024);
+            tree_nums.resize(1024, std::vector<int64_t>(0, 0));
+            tree_nums_bits.resize(1024, std::vector<uint8_t>(0, 0));
             maximum_depth = 0;
             blkst.resize(1);
             blkst.reserve(64);
@@ -291,7 +290,10 @@ namespace SZ3 {
                 auto next_axis = selectAxis(l, r, current_range, current_axis);
 
                 if (num_remaining_points < numblockPointLimit ||
-                    current_range[next_axis * 2 + 1] - current_range[next_axis * 2] <= 4) {
+                    current_range[1] - current_range[0] <= 1 &&
+                    current_range[3] - current_range[2] <= 1 &&
+                    current_range[5] - current_range[4] <= 1
+                            ) {
                     if (l < r) {
                         compressLCP(l, r, depth, current_range, current_index_offset, ord);
                     }
@@ -299,14 +301,17 @@ namespace SZ3 {
                 }
 
                 size_t pivot = current_range[next_axis * 2] +
-//                        (current_range[next_axis * 2 + 1] - current_range[next_axis * 2]) / 2;
-                    largestPowerOf2LessThan(current_range[next_axis * 2 + 1] - current_range[next_axis * 2]);
+                        (current_range[next_axis * 2 + 1] - current_range[next_axis * 2]) / 2;
+//                    largestPowerOf2LessThan(current_range[next_axis * 2 + 1] - current_range[next_axis * 2]);
                 Point *mid = std::partition(l, r, Splitter(next_axis, pivot));
-                int64_t weight_difference = static_cast<int64_t>(r - mid) - static_cast<int64_t>(mid - l);
+                int64_t weight_difference = (static_cast<int64_t>(r - mid) - static_cast<int64_t>(mid - l) - static_cast<int64_t>(r - l) % 2);
+                assert(weight_difference % 2 == 0);
+                weight_difference = weight_difference >> 1;
 //                int64_t weight_difference = mid - l;
 
-                tree_nums[depth].push_back(weight_difference);
                 uint8_t current_tree_nums_bits = ceil(log2(r - l + 1));
+                tree_nums[depth].push_back(weight_difference);
+                if (r - l > 1) tree_nums_sign.push_back(weight_difference < 0);
                 tree_nums_bits[depth].push_back(current_tree_nums_bits);
 
                 size_t current_range_next_axis_l = current_range[next_axis * 2];
@@ -319,13 +324,6 @@ namespace SZ3 {
             }
 
             write(numblockPointLimit, tail);
-
-//            printf("tree_nums.size() = %zu\n", tree_nums.size());
-//            write(tree_nums.size(), tail);
-//            encoder.preprocess_encode(tree_nums.data(), tree_nums.size(), 0, 0x00);
-//            encoder.save(tail);
-//            encoder.encode(tree_nums, tail);
-//            encoder.postprocess_encode();
 
             write(maximum_depth, tail);
 
@@ -344,62 +342,58 @@ namespace SZ3 {
                 }
                 write(static_cast<uchar>(0xaa), tail);
 
-                write(current_blkst.size(), tail);
-                encoder.preprocess_encode(current_blkst.data(), current_blkst.size(), 0, 0x01);
-                encoder.save(tail);
-                encoder.encode(current_blkst, tail);
-                encoder.postprocess_encode();
+                /*
+                 * write the LCP data
+                 */
 
-                write(current_blkcnt.size(), tail);
-                encoder.preprocess_encode(current_blkcnt, 0);
-                encoder.save(tail);
-                encoder.encode(current_blkcnt, tail);
-                encoder.postprocess_encode();
-
-                write(current_repos.size(), tail);
-                encoder.preprocess_encode(current_repos.data(), current_repos.size(), 0, 0x01);
-                encoder.save(tail);
-                encoder.encode(current_repos, tail);
-                encoder.postprocess_encode();
+//                write(current_blkst.size(), tail);
+//                encoder.preprocess_encode(current_blkst.data(), current_blkst.size(), 0, 0x01);
+//                encoder.save(tail);
+//                encoder.encode(current_blkst, tail);
+//                encoder.postprocess_encode();
+//
+//                write(current_blkcnt.size(), tail);
+//                encoder.preprocess_encode(current_blkcnt, 0);
+//                encoder.save(tail);
+//                encoder.encode(current_blkcnt, tail);
+//                encoder.postprocess_encode();
+//
+//                write(current_repos.size(), tail);
+//                encoder.preprocess_encode(current_repos.data(), current_repos.size(), 0, 0x01);
+//                encoder.save(tail);
+//                encoder.encode(current_repos, tail);
+//                encoder.postprocess_encode();
             }
+
+            /*
+             * write the tree info
+             */
+
+            uchar mask = 0x00, index = 0;
+
+            write(tree_nums_sign.size(), tail);
+            for (auto it : tree_nums_sign) {
+                writeBytesBit(tail, it, mask, index);
+            }
+            writeBytesClearMask(tail, mask, index);
 
             uchar *ptail = tail;
             tail += (maximum_depth + 0) * sizeof(int64_t);
             uchar *dhead = tail;
 
-            for (uint8_t depth = 0; depth < maximum_depth; depth++) {
+            for (uint8_t current_depth = 0; current_depth < maximum_depth; current_depth++) {
 
-                auto &current_tree_nums = tree_nums[depth];
-                auto &current_tree_nums_offset = tree_nums_offset[depth];
-                auto &current_tree_nums_bits = tree_nums_bits[depth];
+                auto &current_tree_nums = tree_nums[current_depth];
+                auto &current_tree_nums_bits = tree_nums_bits[current_depth];
 
-                assert(current_tree_nums.size() == current_tree_nums_bits.size());
-
-                if (depth < encoderLimit) {
-
-                    current_tree_nums_offset = current_tree_nums[0];
-    //                for (size_t i = 1; i < current_tree_nums.size(); i++)
-    //                    current_tree_nums_offset = std::min(current_tree_nums_offset, current_tree_nums[i]);
-                    write(current_tree_nums_offset, tail);
-                    uchar mask = 0x00, index = 0;
-//                    printf("depth = %u\n", depth);
-                    for (size_t i = 0; i < current_tree_nums.size(); i++) {
-//                        printf("[%lld %lld]", current_tree_nums[i], current_tree_nums_bits[i]);
-                        writeBytes(tail, current_tree_nums[i] - current_tree_nums_offset, current_tree_nums_bits[i], mask, index);
-                    }
-                    printf("\n");
-                    writeBytesClearMask(tail, mask, index);
+                mask = index = 0;
+                for (size_t i = 0; i < current_tree_nums.size(); i++) {
+                    writeBytes(tail, current_tree_nums[i], current_tree_nums_bits[i], mask, index);
                 }
-                else {
+                writeBytesClearMask(tail, mask, index);
 
-                    write(current_tree_nums.size(), tail);
-                    encoder.preprocess_encode(current_tree_nums.data(), current_tree_nums.size(), 0, 0x00);
-                    encoder.save(tail);
-                    encoder.encode(current_tree_nums, tail);
-                    encoder.postprocess_encode();
-                }
                 write(static_cast<int64_t>(tail - dhead), ptail);
-//                printf("depth = %u, nums = %zu, size = %lld\n", depth, current_tree_nums.size(), static_cast<int64_t>(tail - dhead));
+//                printf("depth = %u, nums = %zu, size = %lld\n", current_depth, current_tree_nums.size(), static_cast<int64_t>(tail - dhead));
                 dhead = tail;
             }
         }
@@ -430,220 +424,224 @@ namespace SZ3 {
             return lossless_data;
         }
 
-        void decompressLCP(T *datax, T *datay, T *dataz, const size_t n, std::array<size_t, 6> &qrange, const double eb,
-                            size_t &blkst_blkcnt_index, size_t &repos_index, size_t &global_index, uchar depth) {
-
-            std::array<size_t, 3> b = getBlockSize();
-            size_t &bx = b[0], &by = b[1], &bz = b[2];
-
-            size_t &lx = qrange[0], &rx = qrange[1];
-            size_t &ly = qrange[2], &ry = qrange[3];
-            size_t &lz = qrange[4], &rz = qrange[5];
-//            printf("[%zu %zu %zu]\n", lx, ly, lz);
-            size_t nx = ceildiv(rx - lx, bx), ny = ceildiv(ry - ly, by), nz = ceildiv(rz - lz, bz);
-
-            size_t initial_repos_index = repos_index;
-
-            auto &current_blkst = blkst[depth];
-            auto &current_blkcnt = blkcnt[depth];
-            auto &current_repos = repos[depth];
-
-            size_t pre_blkst_it = -1;
-
-            while(repos_index - initial_repos_index < n) {
-                auto &blkst_it = current_blkst[blkst_blkcnt_index];
-                blkst_it += pre_blkst_it;
-                pre_blkst_it = blkst_it;
-                auto &blkcnt_it = current_blkcnt[blkst_blkcnt_index];
-                ++blkst_blkcnt_index;
-
-                size_t position_base_x = lx + (blkst_it % nx) * bx;
-                size_t position_base_y = ly + (blkst_it / nx % ny) * by;
-                size_t position_base_z = lz + (blkst_it / nx / ny) * bz;
-
-                while(blkcnt_it--) {
-                    auto &repos_it = current_repos[repos_index];
-                    size_t quantized_position_x = position_base_x + repos_it % bx;
-                    size_t quantized_position_y = position_base_y + repos_it / bx % by;
-                    size_t quantized_position_z = position_base_z + repos_it / bx / by;
-                    datax[global_index] = quantized_position_x * (2 * eb) + eb;
-                    datay[global_index] = quantized_position_y * (2 * eb) + eb;
-                    dataz[global_index] = quantized_position_z * (2 * eb) + eb;
-
-                    ++repos_index;
-                    ++global_index;
-                }
-            }
-        }
-
-        void decompressTreeSplitting(T *datax, T *datay, T *dataz, const size_t &n,
-                                     const std::array<size_t, 3> &qrange, const double eb) {
-            // No use of cmpData, use dtail instead
-
-            class Status {
-            public:
-
-                explicit Status(size_t l, size_t r, uint8_t depth, uchar last_axis, std::array<size_t, 6> &&range) :
-                        l(l), r(r), depth(depth), last_axis(last_axis), range(range) {
-                }
-                explicit Status(size_t l, size_t r, uint8_t depth, uchar last_axis, std::array<size_t, 6> &range) :
-                        l(l), r(r), depth(depth), last_axis(last_axis), range(range) {
-                }
-
-                size_t l, r;
-                uint8_t depth;
-                uchar last_axis;
-                std::array<size_t, 6> range;
-                /*
-                 * l, r are the start and end of the current point set
-                 * range is the range of the current point set
-                 * range[0] and range[1] are the range of x
-                 * range[2] and range[3] are the range of y
-                 * range[4] and range[5] are the range of z
-                 */
-            };
-
-            std::stack<Status> stk;
-            stk.push(Status(0, n, 0, 3 - 1, {0, qrange[0] + 1, 0, qrange[1] + 1, 0, qrange[2] + 1}));
-
-            std::vector<size_t> blkst_blkcnt_index(maximum_depth + 1, 0);
-            std::vector<size_t> repos_index(maximum_depth + 1, 0);
-
-            // For tree nums retrieve
-            std::vector<uchar> index(maximum_depth + 1, 0);
-
-            // For points reconstruction
-            size_t global_index = 0;
-
-            while(!stk.empty()) {
-                Status current_status = std::move(stk.top());
-                stk.pop();
-
-                size_t &l = current_status.l;
-                size_t &r = current_status.r;
-
-                if (l == r) continue;
-
-                uint8_t depth = current_status.depth;
-                uchar &current_axis = current_status.last_axis;
-                std::array<size_t, 6> &current_range = current_status.range;
-
-                uchar next_axis = selectAxis(current_axis);
-
-                if (r - l < numblockPointLimit ||
-                    current_range[next_axis * 2 + 1] - current_range[next_axis * 2] <= 4) {
-                    if (l < r) {
-                        decompressLCP(datax, datay, dataz, r - l, current_range, eb, blkst_blkcnt_index[depth],
-                                    repos_index[depth], global_index, depth);
-                    }
-                    continue;
-                }
-
-                int64_t current_tree_nums = readBytes<int64_t>(dtail[depth], ceil(log2(r - l + 1)), index[depth])
-                        + tree_nums_offset[depth];
-
-                size_t left_remaining_points = (static_cast<int64_t>(r - l) - current_tree_nums) >> 1;
-//                size_t left_remaining_points = current_tree_nums;
-//                size_t right_remaining_points = r - l - left_remaining_points;
-//                assert(static_cast<int64_t>(r - l) - left_remaining_points >= 0);
-                size_t pivot = current_range[next_axis * 2] +
+//        void decompressLCP(T *datax, T *datay, T *dataz, const size_t n, std::array<size_t, 6> &qrange, const double eb,
+//                            size_t &blkst_blkcnt_index, size_t &repos_index, size_t &global_index, uchar depth) {
+//
+//            std::array<size_t, 3> b = getBlockSize();
+//            size_t &bx = b[0], &by = b[1], &bz = b[2];
+//
+//            size_t &lx = qrange[0], &rx = qrange[1];
+//            size_t &ly = qrange[2], &ry = qrange[3];
+//            size_t &lz = qrange[4], &rz = qrange[5];
+////            printf("[%zu %zu %zu]\n", lx, ly, lz);
+//            size_t nx = ceildiv(rx - lx, bx), ny = ceildiv(ry - ly, by), nz = ceildiv(rz - lz, bz);
+//
+//            size_t initial_repos_index = repos_index;
+//
+//            auto &current_blkst = blkst[depth];
+//            auto &current_blkcnt = blkcnt[depth];
+//            auto &current_repos = repos[depth];
+//
+//            size_t pre_blkst_it = -1;
+//
+//            while(repos_index - initial_repos_index < n) {
+//                auto &blkst_it = current_blkst[blkst_blkcnt_index];
+//                blkst_it += pre_blkst_it;
+//                pre_blkst_it = blkst_it;
+//                auto &blkcnt_it = current_blkcnt[blkst_blkcnt_index];
+//                ++blkst_blkcnt_index;
+//
+//                size_t position_base_x = lx + (blkst_it % nx) * bx;
+//                size_t position_base_y = ly + (blkst_it / nx % ny) * by;
+//                size_t position_base_z = lz + (blkst_it / nx / ny) * bz;
+//
+//                while(blkcnt_it--) {
+//                    auto &repos_it = current_repos[repos_index];
+//                    size_t quantized_position_x = position_base_x + repos_it % bx;
+//                    size_t quantized_position_y = position_base_y + repos_it / bx % by;
+//                    size_t quantized_position_z = position_base_z + repos_it / bx / by;
+//                    datax[global_index] = quantized_position_x * (2 * eb) + eb;
+//                    datay[global_index] = quantized_position_y * (2 * eb) + eb;
+//                    dataz[global_index] = quantized_position_z * (2 * eb) + eb;
+//
+//                    ++repos_index;
+//                    ++global_index;
+//                }
+//            }
+//        }
+//
+//        void decompressTreeSplitting(T *datax, T *datay, T *dataz, const size_t &n,
+//                                     const std::array<size_t, 3> &qrange, const double eb) {
+//            // No use of cmpData, use dtail instead
+//
+//            class Status {
+//            public:
+//
+//                explicit Status(size_t l, size_t r, uint8_t depth, uchar last_axis, std::array<size_t, 6> &&range) :
+//                        l(l), r(r), depth(depth), last_axis(last_axis), range(range) {
+//                }
+//                explicit Status(size_t l, size_t r, uint8_t depth, uchar last_axis, std::array<size_t, 6> &range) :
+//                        l(l), r(r), depth(depth), last_axis(last_axis), range(range) {
+//                }
+//
+//                size_t l, r;
+//                uint8_t depth;
+//                uchar last_axis;
+//                std::array<size_t, 6> range;
+//                /*
+//                 * l, r are the start and end of the current point set
+//                 * range is the range of the current point set
+//                 * range[0] and range[1] are the range of x
+//                 * range[2] and range[3] are the range of y
+//                 * range[4] and range[5] are the range of z
+//                 */
+//            };
+//
+//            std::stack<Status> stk;
+//            stk.push(Status(0, n, 0, 3 - 1, {0, qrange[0] + 1, 0, qrange[1] + 1, 0, qrange[2] + 1}));
+//
+//            std::vector<size_t> blkst_blkcnt_index(maximum_depth + 1, 0);
+//            std::vector<size_t> repos_index(maximum_depth + 1, 0);
+//
+//            // For tree nums retrieve
+//            std::vector<uchar> index(maximum_depth + 1, 0);
+//
+//            // For points reconstruction
+//            size_t global_index = 0;
+//
+//            while(!stk.empty()) {
+//                Status current_status = std::move(stk.top());
+//                stk.pop();
+//
+//                size_t &l = current_status.l;
+//                size_t &r = current_status.r;
+//
+//                if (l == r) continue;
+//
+//                uint8_t depth = current_status.depth;
+//                uchar &current_axis = current_status.last_axis;
+//                std::array<size_t, 6> &current_range = current_status.range;
+//
+//                uchar next_axis = selectAxis(current_axis);
+//
+//                if (r - l < numblockPointLimit ||
+//                    current_range[next_axis * 2 + 1] - current_range[next_axis * 2] <= 4) {
+//                    if (l < r) {
+//                        decompressLCP(datax, datay, dataz, r - l, current_range, eb, blkst_blkcnt_index[depth],
+//                                    repos_index[depth], global_index, depth);
+//                    }
+//                    continue;
+//                }
+//
+//                int64_t current_tree_nums = readBytes<int64_t>(dtail[depth], ceil(log2(r - l + 1)), index[depth])
+//                        + tree_nums_offset[ceil(log2(r - l + 1))];
+//
+//                size_t left_remaining_points = (static_cast<int64_t>(r - l) - current_tree_nums) >> 1;
+////                size_t left_remaining_points = current_tree_nums;
+////                size_t right_remaining_points = r - l - left_remaining_points;
+////                assert(static_cast<int64_t>(r - l) - left_remaining_points >= 0);
+//                size_t pivot = current_range[next_axis * 2] +
 //                        (current_range[next_axis * 2 + 1] - current_range[next_axis * 2]) / 2;
-                    largestPowerOf2LessThan(current_range[next_axis * 2 + 1] - current_range[next_axis * 2]);
-
-                size_t current_range_next_axis_l = current_range[next_axis * 2];
-                current_range[next_axis * 2] = pivot;
-                stk.push(Status(l + left_remaining_points, r, depth + 1, next_axis, current_range));
-                current_range[next_axis * 2] = current_range_next_axis_l;
-                current_range[next_axis * 2 + 1] = pivot;
-                stk.push(Status(l, l + left_remaining_points, depth + 1, next_axis, current_range));
-            }
-        }
-
+////                    largestPowerOf2LessThan(current_range[next_axis * 2 + 1] - current_range[next_axis * 2]);
+//
+//                size_t current_range_next_axis_l = current_range[next_axis * 2];
+//                current_range[next_axis * 2] = pivot;
+//                stk.push(Status(l + left_remaining_points, r, depth + 1, next_axis, current_range));
+//                current_range[next_axis * 2] = current_range_next_axis_l;
+//                current_range[next_axis * 2 + 1] = pivot;
+//                stk.push(Status(l, l + left_remaining_points, depth + 1, next_axis, current_range));
+//            }
+//        }
+//
+//        void decompress(const uchar *lossless_data, T *&datax, T *&datay, T *&dataz, size_t &n, size_t cmpSize) {
+//
+//            return;
+//
+//            uchar const *cmpData = lossless.decompress(lossless_data, cmpSize);
+//
+//            SZ3::Config conf;
+//            conf.load(cmpData);
+//            n = conf.num;
+//
+//            if (datax == nullptr && datay == nullptr && dataz == nullptr) {
+//                datax = new T[n];
+//                datay = new T[n];
+//                dataz = new T[n];
+//            }
+//            if (datax == nullptr) datax = new T[n];
+//            if (datay == nullptr) datay = new T[n];
+//            if (dataz == nullptr) dataz = new T[n];
+//
+//            std::array<T, 6> range = {0};
+//            std::array<size_t, 3> qrange = {0};
+//
+//            read(range.data(), 6, cmpData);
+//
+//            qrange[0] = (range[1] - range[0]) / (conf.absErrorBound * 2);
+//            qrange[1] = (range[3] - range[2]) / (conf.absErrorBound * 2);
+//            qrange[2] = (range[5] - range[4]) / (conf.absErrorBound * 2);
+//
+//            size_t remaining_length = 0;
+//
+//            read(numblockPointLimit, cmpData);
+//            read(maximum_depth, cmpData);
+//            blkst.resize(maximum_depth + 1);
+//            blkcnt.resize(maximum_depth + 1);
+//            repos.resize(maximum_depth + 1);
+//            tree_nums_offset.resize(maximum_depth + 1);
+//            dtail.resize(maximum_depth + 1);
+//            for (uint8_t i = 0; i <= maximum_depth; i++) {
+//                uchar flag = 0x00;
+//                read(flag, cmpData);
+//                if (flag == 0x55) continue;
+//                if (flag != 0xaa) {
+//                    printf("flag = %u\n", flag);
+//                    exit(-1);
+//                }
+//                auto &current_blkst = blkst[i];
+//                auto &current_blkcnt = blkcnt[i];
+//                auto &current_repos = repos[i];
+//
+//                readVectorFromEncodedData(current_blkst, cmpData);
+//                readVectorFromEncodedData(current_blkcnt, cmpData);
+//                readVectorFromEncodedData(current_repos, cmpData);
+//            }
+//
+//            dtail[0] = 0;
+//            for (uint8_t i = 1; i <= maximum_depth; i++) {
+//                read(dtail[i], cmpData);
+//            }
+//            for (uint8_t i = 1; i <= maximum_depth; i++) {
+//                dtail[i] = dtail[i] + reinterpret_cast<size_t>(dtail[i - 1]);
+//            }
+//            for (uint8_t i = 0; i <= maximum_depth; i++) {
+//                dtail[i] = cmpData + reinterpret_cast<size_t>(dtail[i]);
+//            }
+//            for (uint8_t i = 0; i < maximum_depth; i++) {
+//                read(tree_nums_offset[i], dtail[i]);
+//            }
+//
+//            decompressTreeSplitting(datax, datay, dataz, n, qrange, conf.absErrorBound);
+//            for (size_t i = 0; i < n; i++) datax[i] += range[0];
+//            for (size_t i = 0; i < n; i++) datay[i] += range[2];
+//            for (size_t i = 0; i < n; i++) dataz[i] += range[4];
+////            delete[] cmpData;
+//        }
         void decompress(const uchar *lossless_data, T *&datax, T *&datay, T *&dataz, size_t &n, size_t cmpSize) {
-
-            uchar const *cmpData = lossless.decompress(lossless_data, cmpSize);
-
-            SZ3::Config conf;
-            conf.load(cmpData);
-            n = conf.num;
-
-            if (datax == nullptr && datay == nullptr && dataz == nullptr) {
-                datax = new T[n];
-                datay = new T[n];
-                dataz = new T[n];
-            }
-            if (datax == nullptr) datax = new T[n];
-            if (datay == nullptr) datay = new T[n];
-            if (dataz == nullptr) dataz = new T[n];
-
-            std::array<T, 6> range = {0};
-            std::array<size_t, 3> qrange = {0};
-
-            read(range.data(), 6, cmpData);
-
-            qrange[0] = (range[1] - range[0]) / (conf.absErrorBound * 2);
-            qrange[1] = (range[3] - range[2]) / (conf.absErrorBound * 2);
-            qrange[2] = (range[5] - range[4]) / (conf.absErrorBound * 2);
-
-            size_t remaining_length = 0;
-
-            read(numblockPointLimit, cmpData);
-            read(maximum_depth, cmpData);
-            blkst.resize(maximum_depth + 1);
-            blkcnt.resize(maximum_depth + 1);
-            repos.resize(maximum_depth + 1);
-            tree_nums_offset.resize(maximum_depth + 1);
-            dvalid.resize(maximum_depth + 1);
-            dtail.resize(maximum_depth + 1);
-            for (uint8_t i = 0; i <= maximum_depth; i++) {
-                uchar flag = 0x00;
-                read(flag, cmpData);
-                if (flag == 0x55) continue;
-                if (flag != 0xaa) {
-                    printf("flag = %u\n", flag);
-                    exit(-1);
-                }
-//                dvalid[i] = 0x55;
-                auto &current_blkst = blkst[i];
-                auto &current_blkcnt = blkcnt[i];
-                auto &current_repos = repos[i];
-
-                readVectorFromEncodedData(current_blkst, cmpData);
-                readVectorFromEncodedData(current_blkcnt, cmpData);
-                readVectorFromEncodedData(current_repos, cmpData);
-            }
-
-            dtail[0] = 0;
-            for (uint8_t i = 1; i <= maximum_depth; i++) {
-                read(dtail[i], cmpData);
-            }
-            for (uint8_t i = 1; i <= maximum_depth; i++) {
-                dtail[i] = dtail[i] + reinterpret_cast<size_t>(dtail[i - 1]);
-            }
-            for (uint8_t i = 0; i <= maximum_depth; i++) {
-                dtail[i] = cmpData + reinterpret_cast<size_t>(dtail[i]);
-            }
-            for (uint8_t i = 0; i < maximum_depth; i++) {
-                read(tree_nums_offset[i], dtail[i]);
-            }
-
-            decompressTreeSplitting(datax, datay, dataz, n, qrange, conf.absErrorBound);
-            for (size_t i = 0; i < n; i++) datax[i] += range[0];
-            for (size_t i = 0; i < n; i++) datay[i] += range[2];
-            for (size_t i = 0; i < n; i++) dataz[i] += range[4];
-//            delete[] cmpData;
+            return;
         }
 
     private:
         size_t numblockPointLimit = 1024;
         // [0, encoderLimit) : VaryLength Encoder
         // [encoderLimit, inf) : Huffman Encoder
-        uint8_t encoderLimit = 0;
+        uint8_t encoderLimit = 128;
 
+        // tree_nums[depth][i]
         std::vector<std::vector<int64_t>> tree_nums;
-        std::vector<int64_t> tree_nums_offset;
         std::vector<std::vector<uint8_t>> tree_nums_bits;
-        std::vector<uchar> dvalid;
+        std::vector<uint8_t> tree_nums_sign;
+
         std::vector<const uchar *> dtail;
         uint8_t maximum_depth;
         std::vector<std::vector<int64_t>> blkst, blkcnt, repos;
