@@ -307,9 +307,9 @@ namespace SZ3 {
 //                int64_t weight_difference = mid - l;
 
                 uint8_t current_tree_nums_bits = ceil(log2(r - l + 1));
-                tree_nums[depth].push_back(weight_difference);
+                tree_nums[current_tree_nums_bits].push_back(weight_difference);
                 if (r - l > 1) tree_nums_sign.push_back(weight_difference < 0);
-                tree_nums_bits[depth].push_back(current_tree_nums_bits);
+//                tree_nums_bits[depth].push_back(current_tree_nums_bits);
 
                 size_t current_range_next_axis_l = current_range[next_axis * 2];
                 current_range[next_axis * 2] = pivot;
@@ -374,18 +374,21 @@ namespace SZ3 {
             }
             writeBytesClearMask(tail, mask, index);
 
+            size_t maximum_bits = tree_nums.size() - 1;
+            while(tree_nums[maximum_bits].empty()) maximum_bits--;
+
             uchar *ptail = tail;
-            tail += (maximum_depth + 0) * sizeof(int64_t);
+            tail += (maximum_bits + 0) * sizeof(int64_t);
             uchar *dhead = tail;
 
-            for (uint8_t current_depth = 0; current_depth < maximum_depth; current_depth++) {
+            for (uint8_t current_bits = 1; current_bits <= maximum_bits; current_bits++) {
 
-                auto &current_tree_nums = tree_nums[current_depth];
-                auto &current_tree_nums_bits = tree_nums_bits[current_depth];
+                auto &current_tree_nums = tree_nums[current_bits];
+//                auto &current_tree_nums_bits = tree_nums_bits[current_depth];
 
                 mask = index = 0;
                 for (size_t i = 0; i < current_tree_nums.size(); i++) {
-                    writeBytes(tail, current_tree_nums[i], current_tree_nums_bits[i], mask, index);
+                    writeBytes(tail, current_tree_nums[i], current_bits, mask, index);
                 }
                 writeBytesClearMask(tail, mask, index);
 
@@ -634,7 +637,7 @@ namespace SZ3 {
         // [encoderLimit, inf) : Huffman Encoder
         uint8_t encoderLimit = 128;
 
-        // tree_nums[depth][i]
+        // tree_nums[bits][i]
         std::vector<std::vector<int64_t>> tree_nums;
         std::vector<std::vector<uint8_t>> tree_nums_bits;
         std::vector<uint8_t> tree_nums_sign;
