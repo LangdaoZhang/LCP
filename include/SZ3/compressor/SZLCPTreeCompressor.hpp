@@ -38,8 +38,8 @@ namespace SZ3 {
             size_t a[3];
             size_t ord;
 
-            explicit Point(size_t x = 0, size_t y = 0, size_t z = 0) {
-                a[0] = x, a[1] = y, a[2] = z;
+            explicit Point(size_t x = 0, size_t y = 0, size_t z = 0, size_t ord_ = 0) {
+                a[0] = x, a[1] = y, a[2] = z, ord = ord_;
             }
 
             size_t &operator[](size_t i) {
@@ -216,7 +216,16 @@ namespace SZ3 {
             return {b, b, b};
         }
 
-        void compressTreeSplitting(Point *l, Point *r, const std::array<size_t, 3> &qrange, uchar *&tail, size_t *ord = nullptr) {
+        void compressTreeSplitting(Point *l, Point *r, const std::array<size_t, 3> qrange, uchar *&tail, size_t *ord = nullptr) {
+
+            for (auto it = l; it < r; it++) {
+                if ((*it)[0] >= qrange[0] || (*it)[1] >= qrange[1] || (*it)[2] >= qrange[2]) {
+                    printf("Error: point out of range\n");
+                    printf("x = %zu, y = %zu, z = %zu\n", (*it)[0], (*it)[1], (*it)[2]);
+                    printf("qrange[0] = %zu, qrange[1] = %zu, qrange[2] = %zu\n", qrange[0], qrange[1], qrange[2]);
+                    exit(-1);
+                }
+            }
 
             size_t n = r - l;
             tree_nums.resize(1024, std::vector<int64_t>(0, 0));
@@ -414,7 +423,56 @@ namespace SZ3 {
             getRangeQuantizePoints(conf, datax, datay, dataz, range, qrange, p);
             write(range.data(), 6, tail);
 
-            compressTreeSplitting(p, p + n, qrange, tail, ord);
+            auto binaryDecomposition = [](size_t n) -> std::vector<size_t> {
+                std::vector<size_t> res;
+                while (n) {
+                    size_t low = n & (-n);
+                    res.push_back(low);
+                    n -= low;
+                }
+                res.push_back(0);
+                std::reverse(res.begin(), res.end());
+                return std::move(res);
+            };
+
+            std::map<size_t, size_t> bdrange_x, bdrange_y, bdrange_z;
+
+            auto prefixSum = [](std::vector<size_t> &&vec, std::map<size_t, size_t> &bdrange) -> std::vector<size_t> {
+                for (size_t i = 1; i < vec.size(); i++) {
+                    size_t cur = vec[i];
+                    vec[i] += vec[i - 1];
+                    bdrange[vec[i]] = cur;
+                }
+                return std::move(vec);
+            };
+
+            auto bdx = prefixSum(binaryDecomposition(qrange[0] + 1), bdrange_x);
+            auto bdy = prefixSum(binaryDecomposition(qrange[1] + 1), bdrange_y);
+            auto bdz = prefixSum(binaryDecomposition(qrange[2] + 1), bdrange_z);
+
+//            debug(bdx);
+//            debug(bdy);
+//            debug(bdz);
+
+            std::map<std::tuple<size_t, size_t, size_t>, std::vector<Point>> mp;
+
+            for (size_t i = 0; i < n; i++) {
+                size_t &x = p[i][0], &y = p[i][1], &z = p[i][2];
+                auto block_x = std::upper_bound(bdx.begin(), bdx.end(), x);
+                auto block_y = std::upper_bound(bdy.begin(), bdy.end(), y);
+                auto block_z = std::upper_bound(bdz.begin(), bdz.end(), z);
+                size_t limit_x = block_x - bdx.begin() - 1;
+                size_t limit_y = block_y - bdy.begin() - 1;
+                size_t limit_z = block_z - bdz.begin() - 1;
+                mp[{limit_x, limit_y, limit_z}].push_back(Point(x - *(--block_x), y - *(--block_y), z - *(--block_z), p[i].ord));
+            }
+
+            for (auto &[u, vec] : mp) {
+                auto &[a, b, c] = u;
+//                printf("[%zu %zu %zu] : %zu\n", a, b, c, vec.size());
+                compressTreeSplitting(vec.data(), vec.data() + vec.size(), {bdx[a + 1] - bdx[a], bdy[b + 1] - bdy[b], bdz[c + 1] - bdz[c]}, tail, ord);
+            }
+
             delete[] p;
 
             uchar *lossless_data = lossless.compress(head, tail - head, compressed_size);
@@ -664,6 +722,14 @@ namespace SZ3 {
             read(vec_length, cmpData);
             encoder.load(cmpData, remaining_length);
             vec = std::move(encoder.decode(cmpData, vec_length));
+        }
+
+        template<typename Type>
+        void debug(std::vector<Type> vec) {
+            for (auto it : vec) {
+                std::cout << it << " ";
+            }
+            std::cout << std::endl;
         }
     };
 
