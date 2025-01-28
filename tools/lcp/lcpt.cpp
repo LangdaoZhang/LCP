@@ -106,6 +106,13 @@ void compress(char *inPath[], char *cmpPath, const SZ3::Config &conf, T *oridata
     uchar *bytes = compressWithoutAllocateMemory(datax, datay, dataz, conf, outSize, ord);
     delete[] data;
 
+    size_t cnt = 0, cnt1 = 0;
+    for (size_t i = 0; i < outSize; i++) {
+        cnt1 += __builtin_popcount(bytes[i]);
+        cnt += 8;
+    }
+    printf("bit ratio = %.2f\n", cnt1 * 1.0 / cnt);
+
     double compress_time = timer.stop();
 
     SZ3::writefile(cmpPath, bytes, outSize);
